@@ -161,8 +161,7 @@ export default function RoomPage({ params }) {
         };
         setStems(outputStems);
 
-        // 3. Extract True Pitch (Runs on client AudioContext)
-        setLoadingStatus('Analyzing perfect pitch contour...');
+        // 3. Extract True Pitch (Runs entirely in background so playback isn't blocked!)
         const basicPitch = new BasicPitch('https://unpkg.com/@spotify/basic-pitch@1.0.1/model/model.json');
         
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 22050 });
@@ -181,24 +180,24 @@ export default function RoomPage({ params }) {
             }
         }
         
-        let extractedNotes = [];
-        await basicPitch.evaluateModel(
+        // Don't await this! Let it run in the background.
+        basicPitch.evaluateModel(
           monoAudioBuffer,
           (framesData, onsets, contours) => {
              const noteEvents = outputToNotesPoly(framesData, onsets, 0.25, 0.25, 5);
              const noteTimes = noteFramesToTime(noteEvents);
              
-             extractedNotes = noteTimes.map(n => ({
+             const notes = noteTimes.map(n => ({
                 midi: Math.round(n.pitchMidi),
                 startTime: n.startTimeSeconds,
                 endTime: n.startTimeSeconds + n.durationSeconds,
                 amplitude: n.amplitude
              })).filter(n => n.amplitude > 0.2);
+             
+             if (notes.length > 0) setGuideNotes(notes);
           },
           (pitchPercentages) => { }
-        ).catch(err => console.error(err));
-
-        if (extractedNotes.length > 0) setGuideNotes(extractedNotes);
+        ).catch(err => console.error("BasicPitch error:", err));
 
         // 4. Set Lyrics from Background or Run Fallback
         if (backgroundLyrics) {
