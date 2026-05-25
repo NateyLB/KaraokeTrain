@@ -95,7 +95,12 @@ export default function LyricsDisplay({ lyrics, currentTime }) {
           
           if (activeWords.length === 0) {
               const wordsText = line.text.split(' ');
-              const timePerWord = duration / Math.max(1, wordsText.length);
+              // Cap the synthetic duration to a reasonable max (e.g. 1.0s per word) 
+              // so words don't get stretched over massive instrumental breaks
+              const maxSyntheticDuration = wordsText.length * 1.0; 
+              const cappedDuration = Math.min(duration, maxSyntheticDuration);
+              
+              const timePerWord = cappedDuration / Math.max(1, wordsText.length);
               activeWords = wordsText.map((w, i) => ({
                   word: w,
                   start: trueStartTime + (i * timePerWord),

@@ -95,11 +95,16 @@ export function useAudioAnalyzer() {
   const vocoderOscRef = useRef(null);
   const vocoderGainRef = useRef(null);
   const animationFrameRef = useRef(null);
+  const streamRef = useRef(null);
+  const isMounted = useRef(true);
   // Smooth pitch with a small history buffer to reduce jitter
   const pitchHistoryRef = useRef([]);
 
   const startListening = async () => {
     try {
+      // Prevent double-start leaks
+      if (streamRef.current) return;
+      
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
@@ -107,6 +112,13 @@ export function useAudioAnalyzer() {
           autoGainControl: false,   // keep false — prevents mic level from jumping
         },
       });
+      
+      if (!isMounted.current) {
+        stream.getTracks().forEach(t => t.stop());
+        return;
+      }
+      
+      streamRef.current = stream;
 
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       audioContextRef.current = new AudioContext();
@@ -168,8 +180,11 @@ export function useAudioAnalyzer() {
 
   const stopListening = () => {
     if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
     if (sourceRef.current) {
-      sourceRef.current.mediaStream.getTracks().forEach(t => t.stop());
       sourceRef.current.disconnect();
     }
     if (vocoderOscRef.current) {
@@ -252,7 +267,13 @@ export function useAudioAnalyzer() {
     }
   };
 
-  useEffect(() => () => stopListening(), []);
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+      stopListening();
+    };
+  }, []);
 
   return { isListening, volume, pitch, startListening, stopListening, setMicVolume, setEchoEnabled, setVocoderTargetFrequency, error };
 }

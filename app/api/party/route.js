@@ -52,8 +52,11 @@ export async function POST(request) {
       fs.mkdirSync(uploadDir, { recursive: true });
       jobQueue.set(jobId, { status: 'processing', progress: 0, message: 'Starting job...' });
 
+      const url = new URL(request.url);
+      const baseUrl = `${url.protocol}//${url.host}`;
+      
       // Start the Demucs and Whisper job instantly in the background!
-      runBackgroundSeparation(song, jobId, uploadDir).catch(err => {
+      runBackgroundSeparation(song, jobId, uploadDir, baseUrl).catch(err => {
         console.error("Background separation error:", err);
         const existing = jobQueue.get(jobId);
         if (existing?.status !== 'error') {

@@ -7,7 +7,8 @@ import AudioVisualizer from '../../../components/AudioVisualizer';
 import SearchBar from '../../../components/SearchBar';
 import { parseLRC } from '../../../lib/lyrics';
 import { BasicPitch, outputToNotesPoly, noteFramesToTime } from '@spotify/basic-pitch';
-import { ArrowLeft, Loader2, Music, Mic, MicOff, Search, X, QrCode, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Loader2, Music, Mic, MicOff, Search, X, QrCode, Trash2, ChevronUp, ChevronDown, Waves, Sparkles, Gamepad2, AlertCircle } from 'lucide-react';
+import { useAudioAnalyzer } from '../../../hooks/useAudioAnalyzer';
 
 function formatTime(seconds) {
   if (!seconds || isNaN(seconds)) return "0:00";
@@ -41,7 +42,36 @@ export default function RoomPage({ params }) {
   const [lyricsOffset, setLyricsOffset] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [vocalsEnabled, setVocalsEnabled] = useState(false);
+  const [vocalsVolume, setVocalsVolume] = useState(1.0);
   const timeUpdateInterval = useRef(null);
+  
+  const [gameModeEnabled, setGameModeEnabled] = useState(false);
+  const [echoOn, setEchoOn] = useState(false);
+  const [autoTuneOn, setAutoTuneOn] = useState(false);
+
+  const { isListening, volume: micVolume, pitch, startListening, stopListening, setMicVolume, setEchoEnabled, setVocoderTargetFrequency, error: micError } = useAudioAnalyzer();
+
+  // Handle Echo Toggling
+  useEffect(() => {
+    setEchoEnabled(echoOn);
+  }, [echoOn, setEchoEnabled]);
+
+  // Live AutoTune Target Pitch Tracking
+  useEffect(() => {
+    if (!autoTuneOn || !isListening) {
+      setVocoderTargetFrequency(0);
+      return;
+    }
+    if (guideNotes) {
+      const activeGuideNote = guideNotes.find(n => currentSongTime >= n.startTime && currentSongTime <= n.endTime);
+      if (activeGuideNote) {
+        const freq = 440 * Math.pow(2, (activeGuideNote.midi - 69) / 12);
+        setVocoderTargetFrequency(freq);
+      } else {
+        setVocoderTargetFrequency(0);
+      }
+    }
+  }, [currentSongTime, autoTuneOn, guideNotes, isListening, setVocoderTargetFrequency]);
   
   // 1. Polling the Party State
   useEffect(() => {
@@ -127,7 +157,7 @@ export default function RoomPage({ params }) {
         // 1. Wait for AI Background Pipeline (Demucs + Whisper)
         setLoadingStatus('Waiting for background AI processing...');
         await new Promise((resolve, reject) => {
-          const pollingInterval = setInterval(async () => {
+          const checkStatus = async () => {
             try {
               const statusRes = await fetch(`/api/separate/status?jobId=${song.jobId}`);
               const statusData = await statusRes.json();
@@ -149,7 +179,10 @@ export default function RoomPage({ params }) {
                 setLoadingStatus(statusData.message || `Separating... ${statusData.progress || 0}%`);
               }
             } catch (err) {}
-          }, 2000);
+          };
+          
+          checkStatus(); // Run immediately so there's no 2 second delay if it's already done!
+          var pollingInterval = setInterval(checkStatus, 2000);
         });
 
         // 2. Setup Stems
@@ -162,102 +195,95 @@ export default function RoomPage({ params }) {
         setStems(outputStems);
 
         // 3. Extract True Pitch (Runs entirely in background so playback isn't blocked!)
-        const basicPitch = new BasicPitch('https://unpkg.com/@spotify/basic-pitch@1.0.1/model/model.json');
-        
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 22050 });
-        const vocalRes = await fetch(outputStems.vocals);
-        const vocalArrayBuffer = await vocalRes.arrayBuffer();
-        const vocalAudioBuffer = await audioCtx.decodeAudioData(vocalArrayBuffer);
-        
-        let monoAudioBuffer = vocalAudioBuffer;
-        if (vocalAudioBuffer.numberOfChannels > 1) {
-            monoAudioBuffer = audioCtx.createBuffer(1, vocalAudioBuffer.length, vocalAudioBuffer.sampleRate);
-            const monoData = monoAudioBuffer.getChannelData(0);
-            const leftData = vocalAudioBuffer.getChannelData(0);
-            const rightData = vocalAudioBuffer.getChannelData(1);
-            for (let i = 0; i < vocalAudioBuffer.length; i++) {
-                monoData[i] = (leftData[i] + rightData[i]) / 2;
+        (async () => {
+            try {
+                const basicPitch = new BasicPitch('https://unpkg.com/@spotify/basic-pitch@1.0.1/model/model.json');
+                
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 22050 });
+                const vocalRes = await fetch(outputStems.vocals);
+                const vocalArrayBuffer = await vocalRes.arrayBuffer();
+                const vocalAudioBuffer = await audioCtx.decodeAudioData(vocalArrayBuffer);
+                
+                let monoAudioBuffer = vocalAudioBuffer;
+                if (vocalAudioBuffer.numberOfChannels > 1) {
+                    monoAudioBuffer = audioCtx.createBuffer(1, vocalAudioBuffer.length, vocalAudioBuffer.sampleRate);
+                    const monoData = monoAudioBuffer.getChannelData(0);
+                    const leftData = vocalAudioBuffer.getChannelData(0);
+                    const rightData = vocalAudioBuffer.getChannelData(1);
+                    for (let i = 0; i < vocalAudioBuffer.length; i++) {
+                        monoData[i] = (leftData[i] + rightData[i]) / 2;
+                    }
+                }
+                
+                // Don't await this! Let it run in the background.
+                basicPitch.evaluateModel(
+                  monoAudioBuffer,
+                  (framesData, onsets, contours) => {
+                     const noteEvents = outputToNotesPoly(framesData, onsets, 0.25, 0.25, 5);
+                     const noteTimes = noteFramesToTime(noteEvents);
+                     
+                     const notes = noteTimes.map(n => ({
+                        midi: Math.round(n.pitchMidi),
+                        startTime: n.startTimeSeconds,
+                        endTime: n.startTimeSeconds + n.durationSeconds,
+                        amplitude: n.amplitude
+                     })).filter(n => n.amplitude > 0.2);
+                     
+                     if (notes.length > 0) setGuideNotes(notes);
+                  },
+                  (pitchPercentages) => { }
+                ).catch(err => console.error("BasicPitch error:", err));
+            } catch (e) {
+                console.error("Failed to start BasicPitch extraction", e);
             }
-        }
-        
-        // Don't await this! Let it run in the background.
-        basicPitch.evaluateModel(
-          monoAudioBuffer,
-          (framesData, onsets, contours) => {
-             const noteEvents = outputToNotesPoly(framesData, onsets, 0.25, 0.25, 5);
-             const noteTimes = noteFramesToTime(noteEvents);
-             
-             const notes = noteTimes.map(n => ({
-                midi: Math.round(n.pitchMidi),
-                startTime: n.startTimeSeconds,
-                endTime: n.startTimeSeconds + n.durationSeconds,
-                amplitude: n.amplitude
-             })).filter(n => n.amplitude > 0.2);
-             
-             if (notes.length > 0) setGuideNotes(notes);
-          },
-          (pitchPercentages) => { }
-        ).catch(err => console.error("BasicPitch error:", err));
+        })();
 
         // 4. Set Lyrics from Background or Run Fallback
         if (backgroundLyrics) {
            // We already have lyrics from the background Whisper process!
-           if (backgroundSource === 'whisper_fallback' && backgroundFetchedLyricsData && backgroundFetchedLyricsData.syncedLyrics) {
-               // If Whisper failed but we had LRCLIB synced lyrics, use those instead
-               const fetchedLyrics = parseLRC(backgroundFetchedLyricsData.syncedLyrics);
-               if (fetchedLyrics.some(l => l.time > 0)) {
-                   setParsedLyrics(fetchedLyrics);
-                   setLyricsSource('LRCLIB (Original Sync)');
-               } else {
-                   setParsedLyrics(backgroundLyrics);
-                   setLyricsSource('Pure Whisper AI (Fallback)');
-               }
-           } else {
-               setParsedLyrics(backgroundLyrics);
-               setLyricsSource(backgroundSource === 'lrclib_aligned' ? 'LRCLIB + Whisper AI' : 'Pure Whisper AI (Fallback)');
-           }
+           setParsedLyrics(backgroundLyrics);
+           setLyricsSource(backgroundSource === 'lrclib_aligned' ? 'LRCLIB + Whisper AI' : 'Pure Whisper AI (Fallback)');
         } else {
            // Fallback logic if the background job didn't do it (e.g. legacy jobs or errors)
-           setLoadingStatus('Transcribing lyrics from audio...');
-           try {
-              const lyricsRes = await fetch(`/api/room?track=${encodeURIComponent(song.title)}&artist=${encodeURIComponent(song.artist)}`);
-              const data = await lyricsRes.json();
-              
-              let fetchedLyrics = null;
-              if (data.lyrics && data.lyrics.syncedLyrics) {
-                fetchedLyrics = parseLRC(data.lyrics.syncedLyrics);
-              } else if (data.lyrics && data.lyrics.plainLyrics) {
-                const lines = data.lyrics.plainLyrics.split('\n').filter(Boolean);
-                fetchedLyrics = lines.map((line, i) => ({ time: i * 3, text: line }));
-              }
-              
-              const plainText = fetchedLyrics ? fetchedLyrics.map(p => p.text).join('\n') : '';
-              const aiRes = await fetch('/api/lyrics/sync', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ jobId: song.jobId, plainLyrics: plainText })
-              });
-              const aiData = await aiRes.json();
-              
-              if (aiRes.ok && aiData.lyrics) {
-                if (aiData.source === 'whisper_fallback' && fetchedLyrics && fetchedLyrics.some(l => l.time > 0)) {
-                  setParsedLyrics(fetchedLyrics);
-                  setLyricsSource('LRCLIB (Original Sync)');
-                } else {
+           // Run asynchronously so we don't block playback!
+           (async () => {
+             try {
+                const lyricsRes = await fetch(`/api/room?track=${encodeURIComponent(song.title)}&artist=${encodeURIComponent(song.artist)}`);
+                const data = await lyricsRes.json();
+                
+                let fetchedLyrics = null;
+                if (data.lyrics && data.lyrics.syncedLyrics) {
+                  fetchedLyrics = parseLRC(data.lyrics.syncedLyrics);
+                } else if (data.lyrics && data.lyrics.plainLyrics) {
+                  const lines = data.lyrics.plainLyrics.split('\n').filter(Boolean);
+                  fetchedLyrics = lines.map((line, i) => ({ time: i * 3, text: line }));
+                }
+                
+                const plainText = fetchedLyrics ? fetchedLyrics.map(p => p.text).join('\n') : '';
+                const aiRes = await fetch('/api/lyrics/sync', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ jobId: song.jobId, plainLyrics: plainText })
+                });
+                const aiData = await aiRes.json();
+                
+                if (aiRes.ok && aiData.lyrics) {
                   setParsedLyrics(aiData.lyrics);
                   setLyricsSource(aiData.source === 'lrclib_aligned' ? 'LRCLIB + Whisper AI' : 'Pure Whisper AI (Fallback)');
+                } else if (fetchedLyrics && fetchedLyrics.some(l => l.time > 0)) {
+                  // If Whisper crashed entirely, fallback to the LRCLIB fetched lyrics if they exist!
+                  setParsedLyrics(fetchedLyrics);
+                  setLyricsSource('LRCLIB (Original Sync - Whisper Failed)');
+                } else {
+                  setParsedLyrics([]);
+                  setLyricsSource('No Lyrics Found');
                 }
-              } else if (fetchedLyrics && fetchedLyrics.some(l => l.time > 0)) {
-                // If Whisper crashed entirely, fallback to the LRCLIB fetched lyrics if they exist!
-                setParsedLyrics(fetchedLyrics);
-                setLyricsSource('LRCLIB (Original Sync - Whisper Failed)');
-              } else {
+             } catch (e) {
+                console.error("Auto Whisper fallback failed:", e);
                 setParsedLyrics([]);
-                setLyricsSource('No Lyrics Found');
-              }
-           } catch (e) {
-              console.error("Auto Whisper fallback failed:", e);
-           }
+                setLyricsSource('Error Loading Lyrics');
+             }
+           })();
         }
 
         setLoadingStatus('');
@@ -272,9 +298,10 @@ export default function RoomPage({ params }) {
 
   useEffect(() => {
     if (audioRefs.current['vocals']) {
-      audioRefs.current['vocals'].volume = vocalsEnabled ? 1 : 0;
+      audioRefs.current['vocals'].muted = !vocalsEnabled;
+      audioRefs.current['vocals'].volume = vocalsVolume;
     }
-  }, [vocalsEnabled]);
+  }, [vocalsEnabled, vocalsVolume]);
 
   const togglePlay = () => {
     if (!stems) return;
@@ -290,7 +317,8 @@ export default function RoomPage({ params }) {
       allStems.forEach(stemKey => {
         if (audioRefs.current[stemKey]) {
            if (stemKey === 'vocals') {
-             audioRefs.current[stemKey].volume = vocalsEnabled ? 1 : 0;
+             audioRefs.current[stemKey].muted = !vocalsEnabled;
+             audioRefs.current[stemKey].volume = vocalsVolume;
            }
            audioRefs.current[stemKey].play();
         }
@@ -379,8 +407,15 @@ export default function RoomPage({ params }) {
                             <p style={{ fontSize: '0.9rem', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{qSong.title}</p>
                             <p style={{ fontSize: '0.75rem', opacity: 0.6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{qSong.artist}</p>
                         </div>
-                        <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', padding: '0.2rem 0.4rem', borderRadius: '4px', background: qSong.jobStatus?.status === 'ready' ? 'rgba(0,255,0,0.1)' : 'var(--glass-bg)', color: qSong.jobStatus?.status === 'ready' ? '#4ade80' : 'var(--text-muted)', marginRight: '1rem' }}>
-                          {qSong.jobStatus?.status || 'pending'}
+                        <div style={{ marginRight: '1rem', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.25rem', minWidth: '4rem' }}>
+                           <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', padding: '0.2rem 0.4rem', borderRadius: '4px', background: qSong.jobStatus?.status === 'ready' ? 'rgba(0,255,0,0.1)' : 'var(--glass-bg)', color: qSong.jobStatus?.status === 'ready' ? '#4ade80' : 'var(--text-muted)' }}>
+                             {qSong.jobStatus?.status === 'processing' ? `${Math.round(qSong.jobStatus.progress || 0)}%` : (qSong.jobStatus?.status || 'pending')}
+                           </div>
+                           {qSong.jobStatus?.status === 'processing' && (
+                             <div style={{ width: '100%', height: '4px', background: 'var(--glass-border)', borderRadius: '2px', overflow: 'hidden' }}>
+                               <div style={{ width: `${qSong.jobStatus.progress || 0}%`, height: '100%', background: 'var(--primary-accent)', transition: 'width 0.3s ease' }} />
+                             </div>
+                           )}
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                            <button onClick={() => handleReorderSong(i, i - 1)} disabled={i === 0} style={{ background: 'none', border: 'none', color: i === 0 ? 'rgba(255,255,255,0.1)' : 'white', cursor: i === 0 ? 'default' : 'pointer', padding: '0.25rem' }}>
@@ -401,6 +436,13 @@ export default function RoomPage({ params }) {
     </>
   );
 
+  // Stop microphone if queue finishes and there is no active song
+  useEffect(() => {
+    if (partyState && !partyState.currentSong && isListening) {
+      stopListening();
+    }
+  }, [partyState, isListening, stopListening]);
+
   if (!partyState || (!partyState.currentSong && !isLoading)) {
       return (
           <div style={{ display: 'flex', minHeight: '100vh', padding: '2rem', position: 'relative' }}>
@@ -412,6 +454,7 @@ export default function RoomPage({ params }) {
                      <h3 className="heading-2" style={{ fontSize: '1.2rem', marginBottom: '1rem', color: 'var(--text-muted)' }}>Search for a song to begin</h3>
                      <SearchBar onSelect={handleQueueSong} />
                   </div>
+
 
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
                       <QrCode size={120} color="var(--primary-accent)" style={{ opacity: 0.8, marginBottom: '2rem' }} />
@@ -453,8 +496,11 @@ export default function RoomPage({ params }) {
 
       {/* Top 25% Search Area (Toggleable) */}
       {isSearchOpen && (
-          <div style={{ height: '25vh', minHeight: '150px', display: 'flex', flexDirection: 'column', padding: '0 2rem', marginBottom: '1rem', zIndex: 10, position: 'relative' }}>
-              <button onClick={() => setIsSearchOpen(false)} style={{ position: 'absolute', right: '2rem', top: 0, background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', borderRadius: '50%', color: 'white', cursor: 'pointer', padding: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 20 }}><X size={16} /></button>
+          <div style={{ height: '30vh', minHeight: '200px', display: 'flex', flexDirection: 'column', padding: '0 2rem', marginBottom: '1rem', zIndex: 10, position: 'relative' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', width: '100%' }}>
+                  <h3 className="heading-2" style={{ fontSize: '1.2rem', margin: 0, color: 'var(--text-muted)' }}>Search YouTube</h3>
+                  <button onClick={() => setIsSearchOpen(false)} style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', borderRadius: '50%', color: 'white', cursor: 'pointer', padding: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={16} /></button>
+              </div>
               <SearchBar onSelect={(song) => { handleQueueSong(song); setIsSearchOpen(false); }} />
           </div>
       )}
@@ -503,24 +549,41 @@ export default function RoomPage({ params }) {
             {vocalsEnabled ? 'Vocals On' : 'Vocals Off'}
          </button>
          <button onClick={() => {
+             const nextState = !gameModeEnabled;
+             setGameModeEnabled(nextState);
+             if (nextState && !isListening) {
+                 startListening();
+             }
+         }} className="btn-secondary" style={{ padding: '0.75rem 1.5rem', borderRadius: '99px', fontSize: '1.1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: gameModeEnabled ? 1 : 0.7 }}>
+            <Gamepad2 size={20} />
+            {gameModeEnabled ? 'Game On' : 'Game Off'}
+         </button>
+         <button onClick={() => {
              if (parsedLyrics.length > 0) {
                  const firstValidLine = parsedLyrics.find(l => l.text.trim().length > 0) || parsedLyrics[0];
-                 setLyricsOffset(currentSongTime - firstValidLine.time);
+                 setLyricsOffset((currentSongTime - firstValidLine.time).toFixed(2));
              }
          }} className="btn-secondary" style={{ padding: '0.75rem 1.5rem', borderRadius: '99px', fontSize: '1.1rem', fontWeight: 600 }} title="Click right when singing starts to align lyrics">
             Align Start
          </button>
-         {lyricsOffset !== 0 && (
-             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--glass-bg)', padding: '0 1rem', borderRadius: '99px', border: '1px solid var(--glass-border)' }}>
-                 <button onClick={() => setLyricsOffset(o => Math.round(((Number(o) || 0) - 0.5) * 100) / 100)} style={{ color: 'white', padding: '0.5rem', fontWeight: 'bold', background: 'transparent', border: 'none', cursor: 'pointer' }}>-</button>
-                 <div style={{ display: 'flex', alignItems: 'center' }}>
-                     <span style={{ fontSize: '0.9rem', opacity: 0.8 }}>Offset: </span>
+         {(() => {
+             const firstValidTime = (parsedLyrics.find(l => l.text.trim().length > 0) || parsedLyrics[0])?.time || 0;
+             const displayTime = ((Number(lyricsOffset) || 0) + firstValidTime).toFixed(2);
+             
+             return lyricsOffset !== 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--glass-bg)', padding: '0 1rem', borderRadius: '99px', border: '1px solid var(--glass-border)' }}>
+                  <button onClick={() => setLyricsOffset(o => Math.round(((Number(o) || 0) - 0.5) * 100) / 100)} style={{ color: 'white', padding: '0.5rem', fontWeight: 'bold', background: 'transparent', border: 'none', cursor: 'pointer' }}>-</button>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.9rem', opacity: 0.8 }}>Start Time: </span>
                      <input 
                          type="number" 
                          step="0.1" 
-                         value={lyricsOffset === 0 ? "0" : lyricsOffset} 
+                         value={displayTime} 
                          onChange={(e) => {
-                             setLyricsOffset(e.target.value);
+                             const newStart = parseFloat(e.target.value);
+                             if (!isNaN(newStart)) {
+                                 setLyricsOffset(newStart - firstValidTime);
+                             }
                          }}
                          onBlur={(e) => {
                              if (e.target.value === "" || e.target.value === "-") {
@@ -539,11 +602,12 @@ export default function RoomPage({ params }) {
                          }} 
                      />
                      <span style={{ fontSize: '0.9rem', opacity: 0.8 }}>s</span>
-                 </div>
-                 <button onClick={() => setLyricsOffset(o => Math.round(((Number(o) || 0) + 0.5) * 100) / 100)} style={{ color: 'white', padding: '0.5rem', fontWeight: 'bold', background: 'transparent', border: 'none', cursor: 'pointer' }}>+</button>
-                 <button onClick={() => setLyricsOffset(0)} style={{ color: 'var(--secondary-accent)', padding: '0.5rem', marginLeft: '0.25rem', fontSize: '0.8rem', fontWeight: 'bold', background: 'transparent', border: 'none', cursor: 'pointer' }}>Reset</button>
-             </div>
-         )}
+                  </div>
+                  <button onClick={() => setLyricsOffset(o => Math.round(((Number(o) || 0) + 0.5) * 100) / 100)} style={{ color: 'white', padding: '0.5rem', fontWeight: 'bold', background: 'transparent', border: 'none', cursor: 'pointer' }}>+</button>
+                  <button onClick={() => setLyricsOffset(0)} style={{ color: 'var(--secondary-accent)', padding: '0.5rem', marginLeft: '0.25rem', fontSize: '0.8rem', fontWeight: 'bold', background: 'transparent', border: 'none', cursor: 'pointer' }}>Reset</button>
+              </div>
+             );
+         })()}
          <button onClick={handleNextSong} className="btn-secondary" style={{ padding: '0.75rem 1.5rem', borderRadius: '99px', fontSize: '1.1rem', fontWeight: 600 }}>
             Skip Song
          </button>
@@ -565,9 +629,127 @@ export default function RoomPage({ params }) {
         )}
       </div>
 
-      <div style={{ marginTop: 'auto', paddingBottom: '1rem' }}>
-        <AudioVisualizer lyrics={parsedLyrics} currentSongTime={currentSongTime} guideNotes={guideNotes} />
+      <div style={{ marginTop: 'auto', paddingBottom: '1rem', display: gameModeEnabled ? 'block' : 'none' }}>
+        <AudioVisualizer lyrics={parsedLyrics} currentSongTime={currentSongTime} guideNotes={guideNotes} isListening={isListening} pitch={pitch} volume={micVolume} />
       </div>
+
+      {/* Floating Microphone Card */}
+      <div style={{
+          position: 'fixed',
+          top: '5rem',
+          left: '1rem',
+          background: 'rgba(20, 20, 25, 0.95)',
+          backdropFilter: 'blur(20px)',
+          border: '1px solid var(--glass-border)',
+          borderRadius: '1rem',
+          padding: '1.25rem',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '1rem',
+          boxShadow: '0 1rem 2rem rgba(0,0,0,0.5)',
+          zIndex: 50,
+          minWidth: '280px'
+      }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+             <h4 style={{ fontSize: '1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Mic size={18} color="var(--primary-accent)" /> Microphone
+             </h4>
+             <button
+               onClick={() => {
+                   if (gameModeEnabled) return;
+                   isListening ? stopListening() : startListening();
+               }}
+               title={gameModeEnabled ? "Microphone must be on while Game is active" : "Toggle Microphone"}
+               style={{
+                 width: '40px',
+                 height: '40px',
+                 borderRadius: '50%',
+                 background: isListening ? 'rgba(236, 72, 153, 0.2)' : 'rgba(255,255,255,0.05)',
+                 border: `1px solid ${isListening ? 'var(--secondary-accent)' : 'var(--glass-border)'}`,
+                 display: 'flex',
+                 alignItems: 'center',
+                 justifyContent: 'center',
+                 cursor: gameModeEnabled ? 'not-allowed' : 'pointer',
+                 opacity: gameModeEnabled ? 0.5 : 1,
+                 transition: 'all 0.2s ease',
+               }}
+             >
+               {isListening
+                 ? <Mic size={20} color="var(--secondary-accent)" />
+                 : <MicOff size={20} color="var(--text-muted)" />
+               }
+             </button>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', width: '32px' }}>Mic</span>
+              <input 
+                type="range" 
+                min={0} 
+                max={1} 
+                step={0.01}
+                defaultValue={0.8}
+                onChange={(e) => setMicVolume(parseFloat(e.target.value))}
+                disabled={!isListening}
+                style={{ flex: 1, accentColor: 'var(--secondary-accent)', height: '4px', cursor: isListening ? 'pointer' : 'not-allowed', opacity: isListening ? 1 : 0.4 }}
+              />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', width: '32px' }}>Voc</span>
+              <input 
+                type="range" 
+                min={0} 
+                max={1} 
+                step={0.01}
+                value={vocalsVolume}
+                onChange={(e) => setVocalsVolume(parseFloat(e.target.value))}
+                disabled={!vocalsEnabled}
+                style={{ flex: 1, accentColor: 'var(--secondary-accent)', height: '4px', cursor: vocalsEnabled ? 'pointer' : 'not-allowed', opacity: vocalsEnabled ? 1 : 0.4 }}
+              />
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button
+              onClick={() => setEchoOn(!echoOn)}
+              disabled={!isListening}
+              style={{
+                flex: 1,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem',
+                background: echoOn ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.05)',
+                border: `1px solid ${echoOn ? 'var(--primary-accent)' : 'var(--glass-border)'}`,
+                color: echoOn ? 'var(--primary-accent)' : 'var(--text-muted)',
+                padding: '0.5rem', borderRadius: '0.5rem', fontSize: '0.8rem', cursor: isListening ? 'pointer' : 'not-allowed', transition: 'all 0.2s',
+                opacity: isListening ? 1 : 0.4
+              }}
+            >
+              <Waves size={14} /> Echo
+            </button>
+            <button
+              onClick={() => setAutoTuneOn(!autoTuneOn)}
+              disabled={!isListening}
+              style={{
+                flex: 1,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem',
+                background: autoTuneOn ? 'rgba(236, 72, 153, 0.2)' : 'rgba(255,255,255,0.05)',
+                border: `1px solid ${autoTuneOn ? 'var(--secondary-accent)' : 'var(--glass-border)'}`,
+                color: autoTuneOn ? 'var(--secondary-accent)' : 'var(--text-muted)',
+                padding: '0.5rem', borderRadius: '0.5rem', fontSize: '0.8rem', cursor: isListening ? 'pointer' : 'not-allowed', transition: 'all 0.2s',
+                opacity: isListening ? 1 : 0.4
+              }}
+            >
+              <Sparkles size={14} /> AutoTune
+            </button>
+          </div>
+
+          {micError && (
+            <p style={{ color: '#ef4444', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.5rem' }}>
+              <AlertCircle size={14} /> {micError}
+            </p>
+          )}
+      </div>
+
     </div>
   );
 }

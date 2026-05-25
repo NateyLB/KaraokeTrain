@@ -1,8 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
-import { Mic, MicOff, AlertCircle, Waves, Sparkles } from 'lucide-react';
-import { useAudioAnalyzer } from '../hooks/useAudioAnalyzer';
 import { useGrading } from '../hooks/useGrading';
 
 // Vocal range we visualize: C2 (MIDI 36) to C6 (MIDI 84)
@@ -17,9 +15,14 @@ function midiToY(midi, height) {
   return height - ((clamped - MIN_MIDI) / MIDI_RANGE) * height;
 }
 
-export default function AudioVisualizer({ lyrics, currentSongTime, guideNotes }) {
-  const { isListening, volume, pitch, startListening, stopListening, setMicVolume, setEchoEnabled, setVocoderTargetFrequency, error } =
-    useAudioAnalyzer();
+export default function AudioVisualizer({ 
+  lyrics, 
+  currentSongTime, 
+  guideNotes,
+  isListening,
+  pitch,
+  volume
+}) {
   const { score, combo, feedback, pitchQuality, resetScore } = useGrading(
     lyrics,
     currentSongTime,
@@ -32,31 +35,6 @@ export default function AudioVisualizer({ lyrics, currentSongTime, guideNotes })
   const pitchTrailRef = useRef([]); // [{ midi, timestamp }]
   const smoothedPitchRef = useRef(null);
   const animFrameRef = useRef(null);
-
-  const [echoOn, setEchoOn] = useState(false);
-  const [autoTuneOn, setAutoTuneOn] = useState(false);
-
-  // Live AutoTune Target Pitch Tracking
-  useEffect(() => {
-    if (!autoTuneOn || !isListening) {
-      setVocoderTargetFrequency(0);
-      return;
-    }
-    if (guideNotes) {
-      const activeGuideNote = guideNotes.find(n => currentSongTime >= n.startTime && currentSongTime <= n.endTime);
-      if (activeGuideNote) {
-        const freq = 440 * Math.pow(2, (activeGuideNote.midi - 69) / 12);
-        setVocoderTargetFrequency(freq);
-      } else {
-        setVocoderTargetFrequency(0);
-      }
-    }
-  }, [currentSongTime, autoTuneOn, guideNotes, isListening, setVocoderTargetFrequency]);
-
-  // Handle Echo Toggling
-  useEffect(() => {
-    setEchoEnabled(echoOn);
-  }, [echoOn, setEchoEnabled]);
 
   // Draw the SingStar-style pitch canvas
   useEffect(() => {
@@ -381,43 +359,6 @@ export default function AudioVisualizer({ lyrics, currentSongTime, guideNotes })
           ref={canvasRef}
           style={{ width: '100%', height: '100%', display: 'block' }}
         />
-
-        {/* Mic button overlay */}
-        <button
-          onClick={isListening ? stopListening : startListening}
-          style={{
-            position: 'absolute',
-            top: '8px',
-            right: '8px',
-            width: '36px',
-            height: '36px',
-            borderRadius: '50%',
-            background: isListening ? 'rgba(236, 72, 153, 0.3)' : 'rgba(255,255,255,0.08)',
-            border: `1px solid ${isListening ? 'var(--secondary-accent)' : 'var(--glass-border)'}`,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-          }}
-        >
-          {isListening
-            ? <Mic size={16} color="var(--secondary-accent)" />
-            : <MicOff size={16} color="var(--text-muted)" />
-          }
-        </button>
-
-        {/* Not listening placeholder */}
-        {!isListening && (
-          <div style={{
-            position: 'absolute', inset: 0,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            flexDirection: 'column', gap: '0.4rem', pointerEvents: 'none',
-          }}>
-            <Mic size={24} color="var(--text-muted)" style={{ opacity: 0.4 }} />
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', opacity: 0.6 }}>Tap mic to start singing</p>
-          </div>
-        )}
       </div>
 
       {/* Pitch quality bar */}
@@ -440,61 +381,6 @@ export default function AudioVisualizer({ lyrics, currentSongTime, guideNotes })
           </div>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.7rem', width: '30px', textAlign: 'right' }}>{Math.round(pitchQuality)}%</p>
         </div>
-      )}
-
-      {/* Controls Row */}
-      {isListening && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-          {/* Mic Volume Slider */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, minWidth: '150px' }}>
-            <Mic size={14} color="var(--text-muted)" />
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.7rem', whiteSpace: 'nowrap', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Monitor</p>
-            <input 
-              type="range" 
-              min={0} 
-              max={5} 
-              step={0.1}
-              defaultValue={0.8}
-              onChange={(e) => setMicVolume(parseFloat(e.target.value))}
-              style={{ flex: 1, accentColor: 'var(--secondary-accent)', height: '4px', cursor: 'pointer' }}
-            />
-          </div>
-
-          {/* Effect Toggles */}
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button
-              onClick={() => setEchoOn(!echoOn)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '0.3rem',
-                background: echoOn ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.05)',
-                border: `1px solid ${echoOn ? 'var(--primary-accent)' : 'var(--glass-border)'}`,
-                color: echoOn ? 'var(--primary-accent)' : 'var(--text-muted)',
-                padding: '0.3rem 0.6rem', borderRadius: '4px', fontSize: '0.75rem', cursor: 'pointer', transition: 'all 0.2s'
-              }}
-            >
-              <Waves size={12} /> Echo
-            </button>
-            <button
-              onClick={() => setAutoTuneOn(!autoTuneOn)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '0.3rem',
-                background: autoTuneOn ? 'rgba(236, 72, 153, 0.2)' : 'rgba(255,255,255,0.05)',
-                border: `1px solid ${autoTuneOn ? 'var(--secondary-accent)' : 'var(--glass-border)'}`,
-                color: autoTuneOn ? 'var(--secondary-accent)' : 'var(--text-muted)',
-                padding: '0.3rem 0.6rem', borderRadius: '4px', fontSize: '0.75rem', cursor: 'pointer', transition: 'all 0.2s'
-              }}
-            >
-              <Sparkles size={12} /> Robot Vocoder
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Error */}
-      {error && (
-        <p style={{ color: '#ef4444', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-          <AlertCircle size={14} /> {error}
-        </p>
       )}
     </div>
   );

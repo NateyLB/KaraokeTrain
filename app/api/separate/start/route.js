@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { runWhisper } from '../../../../lib/whisper_runner';
 import { spawn } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs';
@@ -46,7 +47,7 @@ export async function GET(request) {
   }
 }
 
-export async function runBackgroundSeparation(song, jobId, uploadDir) {
+export async function runBackgroundSeparation(song, jobId, uploadDir, baseUrl = 'http://127.0.0.1:3000') {
   const inputPath = path.join(uploadDir, 'input.m4a');
   const url = `https://www.youtube.com/watch?v=${song.videoId}`;
 
@@ -66,14 +67,14 @@ export async function runBackgroundSeparation(song, jobId, uploadDir) {
 
       let outputLines = [];
 
-      demucsProcess.stdout.on('data', (data) => {
+      const handleOutput = (data) => {
         const lines = data.toString().split('\n');
         for (const line of lines) {
           const trimmed = line.trim();
           if (!trimmed) continue;
           outputLines.push(trimmed);
 
-          // Parse Progress
+          // Parse Progress (tqdm often outputs to stderr)
           const pctMatch = trimmed.match(/(\d{1,3})%\|/);
           if (pctMatch) {
             jobQueue.update(jobId, { progress: parseInt(pctMatch[1], 10), message: `Separating... ${pctMatch[1]}%` });
@@ -92,12 +93,10 @@ export async function runBackgroundSeparation(song, jobId, uploadDir) {
              jobQueue.update(jobId, { message: 'Downloading Demucs model weights (first time only)...' });
           }
         }
-      });
+      };
 
-      demucsProcess.stderr.on('data', (data) => {
-        const line = data.toString().trim();
-        if (line) outputLines.push(line);
-      });
+      demucsProcess.stdout.on('data', handleOutput);
+      demucsProcess.stderr.on('data', handleOutput);
 
       demucsProcess.on('close', (code) => {
         if (code === 0) {
@@ -120,7 +119,7 @@ export async function runBackgroundSeparation(song, jobId, uploadDir) {
     let plainText = '';
     let fetchedLyricsData = null;
     try {
-       const lyricsRes = await fetch(`http://127.0.0.1:3000/api/room?track=${encodeURIComponent(song.title)}&artist=${encodeURIComponent(song.artist)}`);
+       const lyricsRes = await fetch(`${baseUrl}/api/room?track=${encodeURIComponent(song.title)}&artist=${encodeURIComponent(song.artist)}`);
        if (lyricsRes.ok) {
            const data = await lyricsRes.json();
            if (data.lyrics) {
@@ -136,21 +135,13 @@ export async function runBackgroundSeparation(song, jobId, uploadDir) {
        console.error("Background lyrics fetch failed", e);
     }
 
-    // Call our own Whisper Sync endpoint
+    // Call Whisper Sync directly
     let finalLyrics = null;
     let finalSource = 'Unknown';
     try {
-       const aiRes = await fetch(`http://127.0.0.1:3000/api/lyrics/sync`, {
-         method: 'POST',
-         headers: { 'Content-Type': 'application/json' },
-         body: JSON.stringify({ jobId: jobId, plainLyrics: plainText })
-       });
-       
-       if (aiRes.ok) {
-           const aiData = await aiRes.json();
-           finalLyrics = aiData.lyrics;
-           finalSource = aiData.source;
-       }
+       const aiData = await runWhisper(jobId, plainText);
+       finalLyrics = aiData.lyrics;
+       finalSource = aiData.source;
     } catch(e) {
        console.error("Background Whisper failed", e);
     }

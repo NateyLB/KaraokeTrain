@@ -21,33 +21,16 @@ def main():
         with open(args.lyrics, 'r', encoding='utf-8') as f:
             lyrics_text = f.read()
 
-    # Pass first part of LRCLIB lyrics as initial prompt to guide whisper
-    # Prevent whisper hallucination loops by disabling condition_on_previous_text
-    if lyrics_text:
-        # Heavily bias the neural network by feeding it the first 250 chars of the official lyrics.
-        # This completely cures Whisper's tendency to hallucinate during silent/instrumental intros
-        # and guarantees it will correctly identify the first phrase (especially for international songs).
-        initial_prompt = lyrics_text[:250].replace('\n', ' ')
-        segments_gen, _ = model.transcribe(
-            args.wav, 
-            word_timestamps=True, 
-            condition_on_previous_text=False, 
-            no_speech_threshold=0.4,
-            initial_prompt=initial_prompt
-        )
-    else:
-        segments_gen, _ = model.transcribe(
-            args.wav, 
-            word_timestamps=True, 
-            condition_on_previous_text=False, 
-            no_speech_threshold=0.4
-        )
-    
+    segments_gen, _ = model.transcribe(
+        args.wav, 
+        word_timestamps=True, 
+        condition_on_previous_text=False, 
+        no_speech_threshold=0.9
+    )
     whisper_segments = []
     for s in segments_gen:
-        # Filter out heavy noise / silence hallucinations (e.g. "Subtitles by Amara.org")
-        if s.no_speech_prob > 0.4:
-            continue
+        # Rely on VAD to filter out silence, do not aggressively filter out high no_speech_prob
+        # because highly musical singing often gets assigned a no_speech_prob of 0.6 to 0.8!
             
         # Extract word-level data
         segment_words = [{"word": w.word.strip(), "start": w.start, "end": w.end} for w in s.words if w.word.strip()]
@@ -70,30 +53,12 @@ def main():
         }))
         return
         
-    # Verification: compare exactly the first 50 words to avoid length mismatch penalties
     import unicodedata
+    import string
     def normalize_text(text):
-        return unicodedata.normalize('NFC', text.lower())
-        
-    whisper_words = [w for s in whisper_segments for w in s["text"].split()]
-    lrclib_words = [w for l in lyrics_text.split('\n') if l.strip() for w in l.split()]
-    
-    compare_len = min(len(whisper_words), 50)
-    
-    whisper_early = normalize_text(" ".join(whisper_words[:compare_len]))
-    lrclib_early = normalize_text(" ".join(lrclib_words[:compare_len]))
-    
-    similarity = difflib.SequenceMatcher(None, whisper_early, lrclib_early).ratio()
-    
-    if similarity < 0.25:
-        # Mismatch! Fallback to pure Whisper transcription with precise words
-        print(json.dumps({
-            "source": "whisper_fallback", 
-            "lyrics": [{"time": s["start"], "text": s["text"], "words": s["words"]} for s in whisper_segments]
-        }))
-        return
-        
-    # Match! Force Align LRCLIB lines to Whisper timestamps
+        text = unicodedata.normalize('NFC', text.lower()).strip()
+        return text.translate(str.maketrans('', '', string.punctuation))
+
     lrclib_lines = [l.strip() for l in lyrics_text.split('\n') if l.strip()]
     
     # Flatten all whisper words
@@ -101,7 +66,7 @@ def main():
     for s in whisper_segments:
         whisper_words_flat.extend(s.get("words", []))
         
-    whisper_texts = [w["word"].strip().lower() for w in whisper_words_flat]
+    whisper_texts = [normalize_text(w["word"].strip()) for w in whisper_words_flat]
     
     # Flatten all lrclib words, but keep track of which line they belong to
     lrclib_words_flat = []
@@ -112,9 +77,17 @@ def main():
             lrclib_words_flat.append(w)
             word_to_line.append(line_idx)
             
-    lrclib_texts = [w.lower() for w in lrclib_words_flat]
+    lrclib_texts = [normalize_text(w) for w in lrclib_words_flat]
     
     sm = difflib.SequenceMatcher(None, lrclib_texts, whisper_texts)
+    
+    if sm.ratio() < 0.15:
+        # Global Mismatch! Fallback to pure Whisper transcription
+        print(json.dumps({
+            "source": "whisper_fallback", 
+            "lyrics": [{"time": s["start"], "text": s["text"], "words": s["words"]} for s in whisper_segments]
+        }))
+        return
     
     # Map each lrclib word to a start/end time
     mapped_flat_words = []
@@ -130,26 +103,78 @@ def main():
                 block_start = whisper_words_flat[j1]["start"]
                 block_end = whisper_words_flat[j2 - 1]["end"]
             else:
-                block_start = mapped_flat_words[-1]["end"] if mapped_flat_words else 0
-                block_end = block_start + 0.3 * (i2 - i1)
+                # If these are deleted words BEFORE the first sung word (i.e. skipped intro),
+                # assign them to exactly 0.0s so they scroll past instantly!
+                if not mapped_flat_words:
+                    block_start = 0.0
+                    block_end = 0.1
+                else:
+                    block_start = mapped_flat_words[-1]["end"]
+                    extrapolated_end = block_start + 0.3 * (i2 - i1)
+                    if j2 < len(whisper_words_flat):
+                        next_valid_start = whisper_words_flat[j2]["start"]
+                        block_end = min(extrapolated_end, next_valid_start - 0.01)
+                    else:
+                        block_end = extrapolated_end
+                        
+                    block_end = max(block_start + 0.01, block_end)
                 
             block_duration = block_end - block_start
             block_lrclib = lrclib_words_flat[i1:i2]
             total_chars = sum(len(w) for w in block_lrclib)
             
-            curr_time = block_start
-            for k, w_text in enumerate(block_lrclib):
-                w_dur = (len(w_text) / total_chars) * block_duration if total_chars > 0 else 0.3
-                mapped_flat_words.append({"word": w_text, "start": curr_time, "end": curr_time + w_dur, "line_idx": word_to_line[i1 + k]})
-                curr_time += w_dur
+            w_durs = []
+            for w_text in block_lrclib:
+                dur = (len(w_text) / total_chars) * block_duration if total_chars > 0 else 0.3
+                # Cap duration so unmatched words don't get stretched agonizingly slowly across giant audio gaps (like intros)
+                # Max 0.2s per character, minimum 0.5s per word.
+                dur = min(dur, max(0.5, 0.2 * len(w_text)))
+                w_durs.append(dur)
                 
+            total_w_dur = sum(w_durs)
+            
+            # Pack the capped words at the END of the mismatch block so they zip by right before the next matched word
+            curr_time = block_end - total_w_dur
+            curr_time = max(block_start, curr_time)
+            
+            for k, w_text in enumerate(block_lrclib):
+                mapped_flat_words.append({
+                    "word": w_text, 
+                    "start": curr_time, 
+                    "end": curr_time + w_durs[k], 
+                    "line_idx": word_to_line[i1 + k]
+                })
+                curr_time += w_durs[k]
+                
+    # Enforce strictly monotonic timestamps to prevent UI glitching/overlapping words
+    if mapped_flat_words:
+        if mapped_flat_words[0]["end"] < mapped_flat_words[0]["start"]:
+            mapped_flat_words[0]["end"] = mapped_flat_words[0]["start"] + 0.1
+            
+        for i in range(1, len(mapped_flat_words)):
+            prev_w = mapped_flat_words[i - 1]
+            curr_w = mapped_flat_words[i]
+            
+            if curr_w["end"] < curr_w["start"]:
+                curr_w["end"] = curr_w["start"] + 0.1
+                
+            if prev_w["end"] > curr_w["start"]:
+                midpoint = (prev_w["end"] + curr_w["start"]) / 2.0
+                midpoint = max(prev_w["start"] + 0.01, midpoint)
+                prev_w["end"] = midpoint
+                curr_w["start"] = midpoint
+                
+                if curr_w["end"] < curr_w["start"]:
+                    curr_w["end"] = curr_w["start"] + 0.1
+                    
     # Now group the mapped flat words back into lines
     aligned_lyrics = []
     for line_idx, line in enumerate(lrclib_lines):
-        line_words = [w for w in mapped_flat_words if w["line_idx"] == line_idx]
-        # Remove line_idx from the output
-        for w in line_words:
-            del w["line_idx"]
+        line_words = []
+        for w in mapped_flat_words:
+            if w.get("line_idx") == line_idx:
+                w_copy = {k: v for k, v in w.items() if k != "line_idx"}
+                line_words.append(w_copy)
             
         time_start = line_words[0]["start"] if line_words else 0
         aligned_lyrics.append({"time": time_start, "text": line, "words": line_words})
