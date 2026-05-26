@@ -40,6 +40,7 @@ export default function RoomPage({ params }) {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const audioCtxRef = useRef(null);
   const audioRefs = useRef({ vocals: null, no_vocals: null });
+  const setupJobIdRef = useRef(null);
 
   const [duration, setDuration] = useState(0);
   const [lyricsSource, setLyricsSource] = useState('Loading...');
@@ -144,6 +145,8 @@ export default function RoomPage({ params }) {
   };
 
   async function setupRoom(song) {
+      setupJobIdRef.current = song.jobId;
+      
       // Pause any existing audio before setting up new song
       Object.values(audioRefs.current).forEach(audio => {
           if (audio) {
@@ -171,6 +174,10 @@ export default function RoomPage({ params }) {
         setLoadingStatus('KaraokeTrain is getting your song ready... 0%');
         await new Promise((resolve, reject) => {
           const checkStatus = async () => {
+            if (setupJobIdRef.current !== song.jobId) {
+                clearInterval(pollingInterval);
+                return;
+            }
             try {
               const statusRes = await fetch(`/api/separate/status?jobId=${song.jobId}`);
               const statusData = await statusRes.json();
@@ -194,11 +201,14 @@ export default function RoomPage({ params }) {
             } catch (err) {}
           };
           
+          const pollingInterval = setInterval(checkStatus, 2000);
           checkStatus(); // Run immediately so there's no 2 second delay if it's already done!
-          var pollingInterval = setInterval(checkStatus, 2000);
         });
 
-        // 2. Setup Stems
+        if (setupJobIdRef.current !== song.jobId) return;
+
+        // 2. Fetch Audio Stems
+        setLoadingStatus('Loading high-quality audio stems...');
         const outputStems = {
           vocals: `/api/stems?jobId=${song.jobId}&stem=vocals`,
           no_vocals: `/api/stems?jobId=${song.jobId}&stem=no_vocals`,
@@ -249,6 +259,8 @@ export default function RoomPage({ params }) {
             }
         })();
 
+        if (setupJobIdRef.current !== song.jobId) return;
+
         // 4. Set Lyrics from Background or Run Fallback
         if (backgroundLyrics) {
            // We already have lyrics from the background Whisper process!
@@ -276,6 +288,9 @@ export default function RoomPage({ params }) {
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ jobId: song.jobId, plainLyrics: plainText })
                 });
+                
+                if (setupJobIdRef.current !== song.jobId) return;
+                
                 const aiData = await aiRes.json();
                 
                 if (aiRes.ok && aiData.lyrics) {
