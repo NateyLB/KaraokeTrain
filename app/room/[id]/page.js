@@ -7,7 +7,7 @@ import AudioVisualizer from '../../../components/AudioVisualizer';
 import SearchBar from '../../../components/SearchBar';
 import { parseLRC } from '../../../lib/lyrics';
 import { BasicPitch, outputToNotesPoly, noteFramesToTime } from '@spotify/basic-pitch';
-import { ArrowLeft, Loader2, Music, Mic, MicOff, Search, X, QrCode, Trash2, ChevronUp, ChevronDown, Waves, Sparkles, Gamepad2, AlertCircle } from 'lucide-react';
+import { X, Search, ArrowLeft, Mic, MicOff, Music, Gamepad2, Volume2, QrCode, Loader2, Play, Trash2, ChevronUp, ChevronDown, Waves, Sparkles, AlertCircle } from 'lucide-react';
 import { useAudioAnalyzer } from '../../../hooks/useAudioAnalyzer';
 
 function formatTime(seconds) {
@@ -144,8 +144,16 @@ export default function RoomPage({ params }) {
   };
 
   async function setupRoom(song) {
+      // Pause any existing audio before setting up new song
+      Object.values(audioRefs.current).forEach(audio => {
+          if (audio) {
+              audio.pause();
+              audio.currentTime = 0;
+          }
+      });
+      clearInterval(timeUpdateInterval.current);
+      
       // Set states safely
-      setIsPlaying(true);
       try {
         setIsLoading(true);
         setIsPlaying(false);
@@ -299,6 +307,22 @@ export default function RoomPage({ params }) {
       }
   }
 
+  const handlePlayNow = async (index) => {
+    try {
+      const res = await fetch('/api/party', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'playNow', id: roomId, index })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPartyState(data);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   useEffect(() => {
     if (audioRefs.current['vocals']) {
       audioRefs.current['vocals'].muted = !vocalsEnabled;
@@ -421,6 +445,11 @@ export default function RoomPage({ params }) {
                            )}
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                           {qSong.jobStatus?.status === 'ready' && (
+                             <button onClick={() => handlePlayNow(i)} style={{ background: 'none', border: 'none', color: '#4ade80', cursor: 'pointer', padding: '0.25rem', marginRight: '0.25rem' }} title="Play Now">
+                                 <Play size={18} />
+                             </button>
+                           )}
                            <button onClick={() => handleReorderSong(i, i - 1)} disabled={i === 0} style={{ background: 'none', border: 'none', color: i === 0 ? 'rgba(255,255,255,0.1)' : 'white', cursor: i === 0 ? 'default' : 'pointer', padding: '0.25rem' }}>
                                <ChevronUp size={20} />
                            </button>

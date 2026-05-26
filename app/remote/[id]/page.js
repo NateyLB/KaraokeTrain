@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, use } from 'react';
-import { Music2, Clock, CheckCircle2, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
+import { Music2, Clock, CheckCircle2, Trash2, ChevronUp, ChevronDown, Play } from 'lucide-react';
 import SearchBar from '../../../components/SearchBar';
 
 export default function RemotePage({ params }) {
@@ -76,6 +76,22 @@ export default function RemotePage({ params }) {
     } catch (err) { console.error(err); }
   };
 
+  const handlePlayNow = async (index) => {
+    try {
+      const res = await fetch('/api/party', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'playNow', id: roomId, index })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPartyState(data);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const handleReorderSong = async (oldIndex, newIndex) => {
     if (newIndex < 0 || newIndex >= partyState.queue.length) return;
     try {
@@ -138,6 +154,11 @@ export default function RemotePage({ params }) {
                   {song.jobStatus?.status || 'pending'}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                   {song.jobStatus?.status === 'ready' && (
+                     <button onClick={() => handlePlayNow(i)} style={{ background: 'none', border: 'none', color: '#4ade80', cursor: 'pointer', padding: '0.25rem', marginRight: '0.25rem' }} title="Play Now">
+                         <Play size={18} />
+                     </button>
+                   )}
                    <button onClick={() => handleReorderSong(i, i - 1)} disabled={i === 0} style={{ background: 'none', border: 'none', color: i === 0 ? 'rgba(255,255,255,0.1)' : 'white', cursor: i === 0 ? 'default' : 'pointer', padding: '0.25rem' }}>
                        <ChevronUp size={20} />
                    </button>

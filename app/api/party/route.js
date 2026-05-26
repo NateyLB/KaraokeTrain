@@ -104,6 +104,10 @@ export async function POST(request) {
       const { oldIndex, newIndex } = body;
       if (typeof oldIndex !== 'number' || typeof newIndex !== 'number') return NextResponse.json({ error: 'Indices required' }, { status: 400 });
       updatedParty = partyStore.reorderSong(partyId, oldIndex, newIndex);
+    } else if (action === 'playNow') {
+      const { index } = body;
+      if (typeof index !== 'number') return NextResponse.json({ error: 'Index required' }, { status: 400 });
+      updatedParty = partyStore.playNow(partyId, index);
     } else {
       return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
     }
