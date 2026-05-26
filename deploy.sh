@@ -4,11 +4,11 @@
 set -e
 
 # Configuration
-PROJECT_ID="karaoketrain" # TODO: Replace with your actual project ID
+PROJECT_ID="karaoketrain"
 REGION="us-central1"
 SERVICE_NAME="karaoketrain"
 IMAGE_NAME="gcr.io/$PROJECT_ID/$SERVICE_NAME"
-BUCKET_NAME="karaoketrain-stems" # TODO: Replace with your actual bucket name
+BUCKET_NAME="stems-lyrics"
 
 echo "🚀 Building and pushing Docker image using Google Cloud Build..."
 gcloud builds submit --tag $IMAGE_NAME .

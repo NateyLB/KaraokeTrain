@@ -73,27 +73,13 @@ export async function POST(request) {
         return NextResponse.json({ error: `Queue is full (max ${MAX_QUEUE_SIZE} songs)` }, { status: 429 });
       }
 
-      // Check concurrent job capacity
-      if (!canStartJob()) {
-        return NextResponse.json({ error: 'Server is busy. Please wait for current songs to finish processing.' }, { status: 429 });
-      }
-
-      const jobId = crypto.randomUUID();
-      const uploadDir = path.join(process.cwd(), 'uploads', jobId);
-      fs.mkdirSync(uploadDir, { recursive: true });
-      jobQueue.set(jobId, { status: 'processing', progress: 0, message: 'Starting job...' });
-
-      // SECURITY: Use hardcoded localhost to prevent SSRF via Host header
+      // Use an internal fetch to reliably trigger the background separation, bypassing the need for the client to do it.
+      // This solves issues with cached old JS clients, or if the client closes the browser too quickly.
       const baseUrl = process.env.INTERNAL_BASE_URL || 'http://127.0.0.1:3000';
-      
-      // Start the Demucs and Whisper job instantly in the background!
-      runBackgroundSeparation(song, jobId, uploadDir, baseUrl).catch(err => {
-        console.error("Background separation error:", err);
-        const existing = jobQueue.get(jobId);
-        if (existing?.status !== 'error') {
-          jobQueue.update(jobId, { status: 'error', error: 'Processing failed. Please try again.' });
-        }
-      });
+      fetch(`${baseUrl}/api/separate/start?videoId=${encodeURIComponent(song.videoId)}&title=${encodeURIComponent(song.title)}&artist=${encodeURIComponent(song.artist)}`)
+        .catch(err => console.error("Internal background trigger failed:", err));
+
+      const jobId = song.videoId;
 
       const newSong = {
         ...song,

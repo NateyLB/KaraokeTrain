@@ -1,0 +1,5 @@
+[1mImportant: the default model was recently changed to `htdemucs`[0m the latest Hybrid Transformer Demucs model. In some cases, this model can actually perform worse than previous models. To get back the old default model use `-n mdx_extra_q`.
+Selected model is a bag of 1 models. You will see that many progress bars per track.
+Separated tracks will be stored in /Users/Nate/Desktop/GenAIProjects/KaraokeStreaming/test_out/htdemucs
+Separating track uploads/f4e8c24c-090e-4693-b567-67dc05145a25/input.m4a
+  0%|                                                                                 | 0.0/216.45 [00:00<?, ?seconds/s]  3%|█▉                                                                      | 5.85/216.45 [00:05<03:16,  1.07seconds/s]

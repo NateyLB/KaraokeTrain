@@ -14,8 +14,13 @@ const geistMono = Geist_Mono({
 export const metadata = {
   title: "KaraokeTrain - Sing With Friends",
   description: "The ultimate AI-powered karaoke engine.",
+};
+
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
   themeColor: "#05001a",
-  viewport: "width=device-width, initial-scale=1, maximum-scale=1",
 };
 
 export default function RootLayout({ children }) {

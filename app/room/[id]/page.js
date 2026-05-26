@@ -24,6 +24,11 @@ export default function RoomPage({ params }) {
 
   const [partyState, setPartyState] = useState(null);
   const [currentJobId, setCurrentJobId] = useState(null);
+  const [hostUrl, setHostUrl] = useState('');
+
+  useEffect(() => {
+      setHostUrl(window.location.host);
+  }, []);
   
   const [isLoading, setIsLoading] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState('');
@@ -34,7 +39,7 @@ export default function RoomPage({ params }) {
   const [stems, setStems] = useState(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const audioCtxRef = useRef(null);
-  const audioRefs = useRef({ vocals: null, bass: null, drums: null, other: null });
+  const audioRefs = useRef({ vocals: null, no_vocals: null });
 
   const [duration, setDuration] = useState(0);
   const [lyricsSource, setLyricsSource] = useState('Loading...');
@@ -155,7 +160,7 @@ export default function RoomPage({ params }) {
         let backgroundFetchedLyricsData = null;
 
         // 1. Wait for AI Background Pipeline (Demucs + Whisper)
-        setLoadingStatus('Waiting for background AI processing...');
+        setLoadingStatus('KaraokeTrain is getting your song ready... 0%');
         await new Promise((resolve, reject) => {
           const checkStatus = async () => {
             try {
@@ -176,7 +181,7 @@ export default function RoomPage({ params }) {
                 clearInterval(pollingInterval);
                 resolve();
               } else {
-                setLoadingStatus(statusData.message || `Separating... ${statusData.progress || 0}%`);
+                setLoadingStatus(`KaraokeTrain is getting your song ready... ${statusData.progress || 0}%`);
               }
             } catch (err) {}
           };
@@ -188,9 +193,7 @@ export default function RoomPage({ params }) {
         // 2. Setup Stems
         const outputStems = {
           vocals: `/api/stems?jobId=${song.jobId}&stem=vocals`,
-          bass: `/api/stems?jobId=${song.jobId}&stem=bass`,
-          drums: `/api/stems?jobId=${song.jobId}&stem=drums`,
-          other: `/api/stems?jobId=${song.jobId}&stem=other`,
+          no_vocals: `/api/stems?jobId=${song.jobId}&stem=no_vocals`,
         };
         setStems(outputStems);
 
@@ -313,7 +316,7 @@ export default function RoomPage({ params }) {
       clearInterval(timeUpdateInterval.current);
       setIsPlaying(false);
     } else {
-      const allStems = ['vocals', 'bass', 'drums', 'other'];
+      const allStems = ['vocals', 'no_vocals'];
       allStems.forEach(stemKey => {
         if (audioRefs.current[stemKey]) {
            if (stemKey === 'vocals') {
@@ -325,8 +328,8 @@ export default function RoomPage({ params }) {
       });
       
       timeUpdateInterval.current = setInterval(() => {
-        if (audioRefs.current['other']) {
-          setCurrentSongTime(audioRefs.current['other'].currentTime);
+        if (audioRefs.current['no_vocals']) {
+          setCurrentSongTime(audioRefs.current['no_vocals'].currentTime);
         }
       }, 50);
       
@@ -459,7 +462,7 @@ export default function RoomPage({ params }) {
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
                       <QrCode size={120} color="var(--primary-accent)" style={{ opacity: 0.8, marginBottom: '2rem' }} />
                       <h2 className="heading-1 text-gradient" style={{ fontSize: '4rem', letterSpacing: '0.5rem', marginBottom: '1rem' }}>{roomId}</h2>
-                      <p className="body-text" style={{ fontSize: '1.5rem', opacity: 0.8, marginBottom: '3rem' }}>Join at <b>{typeof window !== 'undefined' ? window.location.host : ''}/remote/{roomId}</b> to add songs!</p>
+                      <p className="body-text" style={{ fontSize: '1.5rem', opacity: 0.8, marginBottom: '3rem' }}>Join at <b>{hostUrl}/remote/{roomId}</b> to add songs!</p>
                   </div>
               </div>
           </div>
@@ -525,7 +528,7 @@ export default function RoomPage({ params }) {
       </header>
 
       <div style={{ display: 'none' }}>
-        {stems && ['vocals', 'bass', 'drums', 'other'].map(stem => (
+        {stems && ['vocals', 'no_vocals'].map(stem => (
            stems[stem] && (
              <audio 
                key={stem}
@@ -533,7 +536,7 @@ export default function RoomPage({ params }) {
                src={stems[stem]}
                preload="auto"
                crossOrigin="anonymous"
-               onLoadedMetadata={(e) => { if (stem === 'other') setDuration(e.target.duration); }}
+               onLoadedMetadata={(e) => { if (stem === 'no_vocals') setDuration(e.target.duration); }}
              />
            )
         ))}

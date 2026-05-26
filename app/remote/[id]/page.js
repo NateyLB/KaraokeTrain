@@ -53,6 +53,10 @@ export default function RemotePage({ params }) {
         // Force immediate refresh of state
         const data = await res.json();
         setPartyState(data);
+
+        // Pre-process the song instantly
+        fetch(`/api/separate/start?videoId=${track.videoId}&title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}`)
+          .catch(err => console.error("Failed to start processing", err));
       }
     } catch (err) {
       console.error(err);

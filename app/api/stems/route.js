@@ -13,7 +13,7 @@ export async function GET(request) {
   }
 
   if (!stem || !isValidStem(stem)) {
-    return new NextResponse('Invalid or missing stem (must be: vocals, bass, drums, or other)', { status: 400 });
+    return new NextResponse('Invalid or missing stem (must be: vocals, no_vocals, bass, drums, or other)', { status: 400 });
   }
 
   const fileData = await getFileStream(jobId, stem);
