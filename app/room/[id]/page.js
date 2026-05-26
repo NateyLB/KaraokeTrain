@@ -41,6 +41,7 @@ export default function RoomPage({ params }) {
   const audioCtxRef = useRef(null);
   const audioRefs = useRef({ vocals: null, no_vocals: null });
   const setupJobIdRef = useRef(null);
+  const prefetchedBlobs = useRef({});
 
   const [duration, setDuration] = useState(0);
   const [lyricsSource, setLyricsSource] = useState('Loading...');
@@ -144,6 +145,41 @@ export default function RoomPage({ params }) {
       });
   };
 
+  // Background Pre-fetcher
+  useEffect(() => {
+      if (!partyState?.queue) return;
+      
+      const readySong = partyState.queue.find(q => q.jobStatus?.status === 'ready');
+      if (readySong && !prefetchedBlobs.current[readySong.jobId] && !prefetchedBlobs.current[`fetching_${readySong.jobId}`]) {
+          prefetchedBlobs.current[`fetching_${readySong.jobId}`] = true;
+          
+          console.log(`Prefetching stems for ${readySong.jobId}...`);
+          
+          const fetchStem = async (stemName) => {
+              const res = await fetch(`/api/stems?jobId=${readySong.jobId}&stem=${stemName}`);
+              if (!res.ok) throw new Error(`Failed to download ${stemName}`);
+              const buffer = await res.arrayBuffer();
+              const blob = new Blob([buffer], { type: 'audio/wav' });
+              return { url: URL.createObjectURL(blob), buffer };
+          };
+
+          Promise.all([
+              fetchStem('vocals'),
+              fetchStem('no_vocals')
+          ]).then(([vocalsData, noVocalsData]) => {
+              prefetchedBlobs.current[readySong.jobId] = {
+                  vocals: vocalsData.url,
+                  no_vocals: noVocalsData.url,
+                  vocalBuffer: vocalsData.buffer
+              };
+              console.log(`Prefetched ${readySong.jobId} successfully!`);
+          }).catch(err => {
+              console.error("Failed to prefetch song:", err);
+              delete prefetchedBlobs.current[`fetching_${readySong.jobId}`];
+          });
+      }
+  }, [partyState?.queue]);
+
   async function setupRoom(song) {
       setupJobIdRef.current = song.jobId;
       
@@ -208,10 +244,35 @@ export default function RoomPage({ params }) {
         if (setupJobIdRef.current !== song.jobId) return;
 
         // 2. Fetch Audio Stems
-        setLoadingStatus('Loading high-quality audio stems...');
+        let vocalsData = null;
+        let noVocalsData = null;
+        
+        if (prefetchedBlobs.current[song.jobId]) {
+            // Use background cached versions!
+            vocalsData = { url: prefetchedBlobs.current[song.jobId].vocals, buffer: prefetchedBlobs.current[song.jobId].vocalBuffer };
+            noVocalsData = { url: prefetchedBlobs.current[song.jobId].no_vocals };
+        } else {
+            setLoadingStatus('Downloading high-quality audio stems (this may take a moment)...');
+            
+            const fetchStem = async (stemName) => {
+                const res = await fetch(`/api/stems?jobId=${song.jobId}&stem=${stemName}`);
+                if (!res.ok) throw new Error(`Failed to download ${stemName}`);
+                const buffer = await res.arrayBuffer();
+                const blob = new Blob([buffer], { type: 'audio/wav' });
+                return { url: URL.createObjectURL(blob), buffer };
+            };
+
+            [vocalsData, noVocalsData] = await Promise.all([
+                fetchStem('vocals'),
+                fetchStem('no_vocals')
+            ]);
+        }
+
+        if (setupJobIdRef.current !== song.jobId) return;
+
         const outputStems = {
-          vocals: `/api/stems?jobId=${song.jobId}&stem=vocals`,
-          no_vocals: `/api/stems?jobId=${song.jobId}&stem=no_vocals`,
+          vocals: vocalsData.url,
+          no_vocals: noVocalsData.url,
         };
         setStems(outputStems);
 
@@ -221,9 +282,9 @@ export default function RoomPage({ params }) {
                 const basicPitch = new BasicPitch('https://unpkg.com/@spotify/basic-pitch@1.0.1/model/model.json');
                 
                 const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 22050 });
-                const vocalRes = await fetch(outputStems.vocals);
-                const vocalArrayBuffer = await vocalRes.arrayBuffer();
-                const vocalAudioBuffer = await audioCtx.decodeAudioData(vocalArrayBuffer);
+                // Reuse the buffer we already downloaded instead of fetching again!
+                // Slice it to avoid neutering the original buffer if the browser shares memory
+                const vocalAudioBuffer = await audioCtx.decodeAudioData(vocalsData.buffer.slice(0));
                 
                 let monoAudioBuffer = vocalAudioBuffer;
                 if (vocalAudioBuffer.numberOfChannels > 1) {
@@ -362,7 +423,7 @@ export default function RoomPage({ params }) {
              audioRefs.current[stemKey].muted = !vocalsEnabled;
              audioRefs.current[stemKey].volume = vocalsVolume;
            }
-           audioRefs.current[stemKey].play();
+           audioRefs.current[stemKey].play().catch(e => console.error("Play prevented", e));
         }
       });
       
@@ -375,6 +436,55 @@ export default function RoomPage({ params }) {
       setIsPlaying(true);
     }
   };
+
+  // Strict Audio Synchronization Logic
+  useEffect(() => {
+    const leader = audioRefs.current['no_vocals'];
+    const follower = audioRefs.current['vocals'];
+    
+    if (!leader || !follower) return;
+
+    let isSyncing = false;
+
+    const handleTimeUpdate = () => {
+      if (isSyncing) return;
+      const diff = Math.abs(leader.currentTime - follower.currentTime);
+      if (diff > 0.1) {
+        isSyncing = true;
+        follower.currentTime = leader.currentTime;
+        setTimeout(() => { isSyncing = false; }, 50);
+      }
+    };
+
+    const handleWaiting = () => {
+      follower.pause();
+    };
+
+    const handlePlaying = () => {
+      if (isPlaying) {
+        follower.play().catch(() => {});
+      }
+    };
+
+    const handlePause = () => {
+      // If leader paused due to buffering or user, make sure follower pauses
+      if (leader.paused) {
+         follower.pause();
+      }
+    };
+
+    leader.addEventListener('timeupdate', handleTimeUpdate);
+    leader.addEventListener('waiting', handleWaiting);
+    leader.addEventListener('playing', handlePlaying);
+    leader.addEventListener('pause', handlePause);
+
+    return () => {
+      leader.removeEventListener('timeupdate', handleTimeUpdate);
+      leader.removeEventListener('waiting', handleWaiting);
+      leader.removeEventListener('playing', handlePlaying);
+      leader.removeEventListener('pause', handlePause);
+    };
+  }, [stems, isPlaying]);
 
   const handleQueueSong = async (track) => {
     await fetch('/api/party', {
