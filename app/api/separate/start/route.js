@@ -6,6 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { jobQueue } from '../../../../lib/jobQueue';
+import { uploadDirectory } from '../../../../lib/storage';
 
 const execAsync = promisify(require('child_process').exec);
 
@@ -60,8 +61,9 @@ export async function runBackgroundSeparation(song, jobId, uploadDir, baseUrl = 
     jobQueue.update(jobId, { message: 'Loading AI model...' });
     
     await new Promise((resolve, reject) => {
-      // Spawn demucs using the python from the user's MusicPractice venv
-      const pythonPath = path.join(process.env.HOME, 'Desktop', 'GenAIProjects', 'MusicPractice', 'backend', '.venv', 'bin', 'python3');
+      // Spawn demucs using the python path from env, or fallback to the local venv
+      const defaultPythonPath = path.join(process.env.HOME || '', 'Desktop', 'GenAIProjects', 'MusicPractice', 'backend', '.venv', 'bin', 'python3');
+      const pythonPath = process.env.PYTHON_BIN_PATH || defaultPythonPath;
       const cmdArgs = ['-m', 'demucs', '--out', uploadDir, '-d', 'cpu', inputPath];
       const demucsProcess = spawn(pythonPath, cmdArgs);
 
@@ -77,7 +79,9 @@ export async function runBackgroundSeparation(song, jobId, uploadDir, baseUrl = 
           // Parse Progress (tqdm often outputs to stderr)
           const pctMatch = trimmed.match(/(\d{1,3})%\|/);
           if (pctMatch) {
-            jobQueue.update(jobId, { progress: parseInt(pctMatch[1], 10), message: `Separating... ${pctMatch[1]}%` });
+            const rawProgress = parseInt(pctMatch[1], 10);
+            const scaledProgress = Math.floor(rawProgress * 0.85); // Save last 15% for Whisper
+            jobQueue.update(jobId, { progress: scaledProgress, message: `Separating audio... ${rawProgress}%` });
             continue;
           }
 
@@ -111,9 +115,16 @@ export async function runBackgroundSeparation(song, jobId, uploadDir, baseUrl = 
          reject(err);
       });
     });
+    
+    jobQueue.update(jobId, { message: 'Uploading stems to Cloud Storage...' });
+    try {
+        await uploadDirectory(path.join(uploadDir, 'htdemucs'), `uploads/${jobId}/htdemucs`);
+    } catch(e) {
+        console.error("GCS Upload failed:", e);
+    }
 
     // 3. Fetch Lyrics and Run Whisper (All in background!)
-    jobQueue.update(jobId, { message: 'Verifying lyrics alignment with Whisper AI...' });
+    jobQueue.update(jobId, { progress: 85, message: 'Verifying lyrics alignment with Whisper AI...' });
     
     // Fetch lyrics manually using the server endpoint logic
     let plainText = '';
@@ -139,7 +150,10 @@ export async function runBackgroundSeparation(song, jobId, uploadDir, baseUrl = 
     let finalLyrics = null;
     let finalSource = 'Unknown';
     try {
-       const aiData = await runWhisper(jobId, plainText);
+       const aiData = await runWhisper(jobId, fetchedLyricsData, (whisperPercent) => {
+           const scaledProgress = 85 + Math.floor(whisperPercent * 0.15);
+           jobQueue.update(jobId, { progress: scaledProgress, message: `Aligning lyrics... ${scaledProgress}%` });
+       });
        finalLyrics = aiData.lyrics;
        finalSource = aiData.source;
     } catch(e) {

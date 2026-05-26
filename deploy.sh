@@ -1,0 +1,31 @@
+#!/bin/bash
+
+# Exit on error
+set -e
+
+# Configuration
+PROJECT_ID="karaoketrain" # TODO: Replace with your actual project ID
+REGION="us-central1"
+SERVICE_NAME="karaoketrain"
+IMAGE_NAME="gcr.io/$PROJECT_ID/$SERVICE_NAME"
+BUCKET_NAME="karaoketrain-stems" # TODO: Replace with your actual bucket name
+
+echo "🚀 Building Docker image..."
+docker build --platform linux/amd64 -t $IMAGE_NAME .
+
+echo "☁️ Pushing image to Google Container Registry..."
+# Make sure you have authenticated: gcloud auth configure-docker
+docker push $IMAGE_NAME
+
+echo "🚢 Deploying to Cloud Run..."
+gcloud run deploy $SERVICE_NAME \
+  --image $IMAGE_NAME \
+  --platform managed \
+  --region $REGION \
+  --allow-unauthenticated \
+  --memory 4Gi \
+  --cpu 2 \
+  --timeout 3600 \
+  --set-env-vars="STORAGE_MODE=gcs,GCS_BUCKET_NAME=$BUCKET_NAME"
+
+echo "✅ Deployment complete!"

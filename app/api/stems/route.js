@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
+import { getFileStream } from '../../../lib/storage';
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
@@ -11,16 +10,13 @@ export async function GET(request) {
     return new NextResponse('Missing parameters', { status: 400 });
   }
 
-  // Demucs outputs to: uploads/jobId/htdemucs/input/{stem}.wav
-  // Notice that 'input' is the basename of our input.m4a file
-  const stemPath = path.join(process.cwd(), 'uploads', jobId, 'htdemucs', 'input', `${stem}.wav`);
+  const fileData = await getFileStream(jobId, stem);
 
-  if (!fs.existsSync(stemPath)) {
+  if (!fileData) {
     return new NextResponse('Stem not found', { status: 404 });
   }
 
-  const stat = fs.statSync(stemPath);
-  const fileSize = stat.size;
+  const fileSize = fileData.size;
   const range = request.headers.get('range');
 
   if (range) {
@@ -28,9 +24,18 @@ export async function GET(request) {
     const start = parseInt(parts[0], 10);
     const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
     const chunksize = end - start + 1;
-    const file = fs.createReadStream(stemPath, { start, end });
+    
+    const streamOptions = { start, end };
+    const stream = fileData.source === 'gcs' 
+      ? fileData.gcsFile.createReadStream(streamOptions) 
+      : fileData.stream; // fs.createReadStream handles start/end differently, wait!
 
-    return new NextResponse(file, {
+    // If local, we should create a NEW stream with start/end
+    const finalStream = fileData.source === 'local'
+      ? require('fs').createReadStream(fileData.stream.path, streamOptions)
+      : stream;
+
+    return new NextResponse(finalStream, {
       status: 206,
       headers: {
         'Content-Range': `bytes ${start}-${end}/${fileSize}`,
@@ -40,8 +45,7 @@ export async function GET(request) {
       },
     });
   } else {
-    const file = fs.createReadStream(stemPath);
-    return new NextResponse(file, {
+    return new NextResponse(fileData.stream, {
       status: 200,
       headers: {
         'Content-Length': fileSize,

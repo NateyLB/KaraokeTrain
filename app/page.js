@@ -27,9 +27,9 @@ export default function Home() {
       <header style={{ textAlign: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
           <Music2 size={56} color="var(--primary-accent)" />
-          <h1 className="heading-1 text-gradient" style={{ fontSize: '3rem' }}>Karaoke Vibe</h1>
+          <h1 className="heading-1 text-gradient" style={{ fontSize: '3rem' }}>KaraokeTrain</h1>
         </div>
-        <p className="body-text" style={{ fontSize: '1.2rem', opacity: 0.8 }}>The ultimate AI-powered karaoke party.</p>
+        <p className="body-text" style={{ fontSize: '1.2rem', opacity: 0.8 }}>The ultimate AI-powered karaoke engine.</p>
       </header>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem', width: '100%', maxWidth: '400px' }}>

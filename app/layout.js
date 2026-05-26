@@ -12,9 +12,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata = {
-  title: "Karaoke Vibe - Sing With Friends",
-  description: "A premium mobile-first karaoke experience.",
-  themeColor: "#0a0514",
+  title: "KaraokeTrain - Sing With Friends",
+  description: "The ultimate AI-powered karaoke engine.",
+  themeColor: "#05001a",
   viewport: "width=device-width, initial-scale=1, maximum-scale=1",
 };
 
