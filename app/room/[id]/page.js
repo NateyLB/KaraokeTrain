@@ -609,7 +609,7 @@ export default function RoomPage({ params }) {
              );
          })()}
          <button onClick={handleNextSong} className="btn-secondary" style={{ padding: '0.75rem 1.5rem', borderRadius: '99px', fontSize: '1.1rem', fontWeight: 600 }}>
-            Skip Song
+            Next Song
          </button>
       </div>
 

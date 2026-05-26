@@ -10,12 +10,8 @@ SERVICE_NAME="karaoketrain"
 IMAGE_NAME="gcr.io/$PROJECT_ID/$SERVICE_NAME"
 BUCKET_NAME="karaoketrain-stems" # TODO: Replace with your actual bucket name
 
-echo "🚀 Building Docker image..."
-docker build --platform linux/amd64 -t $IMAGE_NAME .
-
-echo "☁️ Pushing image to Google Container Registry..."
-# Make sure you have authenticated: gcloud auth configure-docker
-docker push $IMAGE_NAME
+echo "🚀 Building and pushing Docker image using Google Cloud Build..."
+gcloud builds submit --tag $IMAGE_NAME .
 
 echo "🚢 Deploying to Cloud Run..."
 gcloud run deploy $SERVICE_NAME \

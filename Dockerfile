@@ -14,10 +14,13 @@ ENV VIRTUAL_ENV=/opt/venv
 RUN python3 -m venv $VIRTUAL_ENV
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
-# Install Python dependencies for Demucs, Faster Whisper, and yt-dlp (pinned versions)
+# 1. Install PyTorch CPU first (from custom index)
 RUN pip install --no-cache-dir \
-    torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu \
-    htdemucs \
+    torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+
+# 2. Install everything else (from default PyPI)
+RUN pip install --no-cache-dir \
+    demucs \
     faster-whisper \
     yt-dlp==2024.12.23
 
