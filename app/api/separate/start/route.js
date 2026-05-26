@@ -1,14 +1,13 @@
 import { NextResponse } from 'next/server';
 import { runWhisper } from '../../../../lib/whisper_runner';
 import { spawn } from 'child_process';
-import { promisify } from 'util';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { jobQueue } from '../../../../lib/jobQueue';
 import { uploadDirectory } from '../../../../lib/storage';
-
-const execAsync = promisify(require('child_process').exec);
+import { isValidVideoId } from '../../../../lib/validators';
+import { canStartJob, startJob, finishJob } from '../../../../lib/rateLimiter';
 
 export const maxDuration = 300;
 
@@ -16,8 +15,12 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const videoId = searchParams.get('videoId');
 
-  if (!videoId) {
-    return NextResponse.json({ error: 'videoId is required' }, { status: 400 });
+  if (!videoId || !isValidVideoId(videoId)) {
+    return NextResponse.json({ error: 'A valid YouTube videoId is required' }, { status: 400 });
+  }
+
+  if (!canStartJob()) {
+    return NextResponse.json({ error: 'Server is busy processing other songs. Please try again shortly.' }, { status: 429 });
   }
 
   const jobId = crypto.randomUUID();
@@ -31,11 +34,11 @@ export async function GET(request) {
     jobQueue.set(jobId, { status: 'processing', progress: 0, message: 'Starting job...' });
 
     // Start background process (fire and forget)
-    runBackgroundSeparation(videoId, jobId, uploadDir).catch(err => {
+    runBackgroundSeparation({ videoId }, jobId, uploadDir).catch(err => {
       console.error("Background separation error:", err);
       const existing = jobQueue.get(jobId);
       if (existing?.status !== 'error') {
-        jobQueue.update(jobId, { status: 'error', error: err.message });
+        jobQueue.update(jobId, { status: 'error', error: 'Processing failed. Please try again.' });
       }
     });
 
@@ -44,18 +47,41 @@ export async function GET(request) {
 
   } catch (err) {
     console.error('Failed to start separation:', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: 'An internal error occurred' }, { status: 500 });
   }
 }
 
 export async function runBackgroundSeparation(song, jobId, uploadDir, baseUrl = 'http://127.0.0.1:3000') {
   const inputPath = path.join(uploadDir, 'input.m4a');
+
+  // SECURITY: Validate videoId strictly before using in any command
+  if (!song.videoId || !isValidVideoId(song.videoId)) {
+    throw new Error('Invalid videoId format');
+  }
+
   const url = `https://www.youtube.com/watch?v=${song.videoId}`;
 
+  startJob();
   try {
-    // 1. Download Audio
+    // 1. Download Audio (SECURITY: Using spawn instead of exec to prevent command injection)
     jobQueue.update(jobId, { message: 'Downloading high-quality audio...' });
-    await execAsync(`yt-dlp -f "bestaudio[ext=m4a]/bestaudio" -o "${inputPath}" "${url}"`);
+    await new Promise((resolve, reject) => {
+      const ytdlp = spawn('yt-dlp', [
+        '-f', 'bestaudio[ext=m4a]/bestaudio',
+        '-o', inputPath,
+        '--no-playlist',       // Never download playlists
+        '--max-filesize', '50m', // Limit file size to prevent disk exhaustion
+        url
+      ]);
+
+      let stderrOutput = '';
+      ytdlp.stderr.on('data', (data) => { stderrOutput += data.toString(); });
+      ytdlp.on('close', (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`yt-dlp exited with code ${code}`));
+      });
+      ytdlp.on('error', reject);
+    });
 
     // 2. Run Demucs
     jobQueue.update(jobId, { message: 'Loading AI model...' });
@@ -106,7 +132,6 @@ export async function runBackgroundSeparation(song, jobId, uploadDir, baseUrl = 
         if (code === 0) {
           resolve();
         } else {
-          const tail = outputLines.slice(-8).join('\n');
           reject(new Error(`Demucs exited with code ${code}. Check the UI for details.`));
         }
       });
@@ -124,13 +149,15 @@ export async function runBackgroundSeparation(song, jobId, uploadDir, baseUrl = 
     }
 
     // 3. Fetch Lyrics and Run Whisper (All in background!)
+    // SECURITY: Always use hardcoded localhost to prevent SSRF via Host header manipulation
     jobQueue.update(jobId, { progress: 85, message: 'Verifying lyrics alignment with Whisper AI...' });
     
     // Fetch lyrics manually using the server endpoint logic
     let plainText = '';
     let fetchedLyricsData = null;
     try {
-       const lyricsRes = await fetch(`${baseUrl}/api/room?track=${encodeURIComponent(song.title)}&artist=${encodeURIComponent(song.artist)}`);
+       const internalBaseUrl = process.env.INTERNAL_BASE_URL || 'http://127.0.0.1:3000';
+       const lyricsRes = await fetch(`${internalBaseUrl}/api/room?track=${encodeURIComponent(song.title)}&artist=${encodeURIComponent(song.artist)}`);
        if (lyricsRes.ok) {
            const data = await lyricsRes.json();
            if (data.lyrics) {
@@ -166,11 +193,23 @@ export async function runBackgroundSeparation(song, jobId, uploadDir, baseUrl = 
         message: 'Ready to sing!',
         lyrics: finalLyrics,
         lyricsSource: finalSource,
-        fetchedLyricsData: fetchedLyricsData // Pass the raw LRCLIB response just in case it needs fallback
+        fetchedLyricsData: fetchedLyricsData
     });
 
+    // Schedule cleanup of upload directory after 30 minutes
+    setTimeout(() => {
+      try {
+        fs.rmSync(uploadDir, { recursive: true, force: true });
+        console.log(`Cleaned up upload directory: ${jobId}`);
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+    }, 30 * 60 * 1000);
+
   } catch (err) {
-    jobQueue.update(jobId, { status: 'error', error: err.message });
+    jobQueue.update(jobId, { status: 'error', error: 'Processing failed. Please try again.' });
     throw err;
+  } finally {
+    finishJob();
   }
 }

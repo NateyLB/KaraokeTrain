@@ -2,16 +2,20 @@ import { NextResponse } from 'next/server';
 import { partyStore } from '../../../lib/partyStore';
 import { jobQueue } from '../../../lib/jobQueue';
 import { runBackgroundSeparation } from '../separate/start/route';
+import { isValidVideoId, isValidPartyId } from '../../../lib/validators';
+import { checkRateLimit, canStartJob } from '../../../lib/rateLimiter';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
+
+const MAX_QUEUE_SIZE = 20;
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');
 
-  if (!id) {
-    return NextResponse.json({ error: 'Party ID is required' }, { status: 400 });
+  if (!id || !isValidPartyId(id)) {
+    return NextResponse.json({ error: 'A valid Party ID is required' }, { status: 400 });
   }
 
   const party = partyStore.get(id.toUpperCase());
@@ -36,10 +40,21 @@ export async function GET(request) {
 
 export async function POST(request) {
   try {
+    // Rate limit by IP
+    const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() 
+                   || request.headers.get('x-real-ip') 
+                   || 'unknown';
+    const rateCheck = checkRateLimit(`party:${clientIp}`, { maxRequests: 30, windowMs: 60000 });
+    if (!rateCheck.allowed) {
+      return NextResponse.json({ error: 'Too many requests. Please slow down.' }, { status: 429 });
+    }
+
     const body = await request.json();
     const { action, id, song } = body;
 
-    if (!id) return NextResponse.json({ error: 'Party ID required' }, { status: 400 });
+    if (!id || !isValidPartyId(id)) {
+      return NextResponse.json({ error: 'A valid Party ID is required' }, { status: 400 });
+    }
 
     const partyId = id.toUpperCase();
     let updatedParty;
@@ -47,20 +62,36 @@ export async function POST(request) {
     if (action === 'add') {
       if (!song || !song.videoId) return NextResponse.json({ error: 'Song with videoId required' }, { status: 400 });
       
+      // SECURITY: Validate videoId format before processing
+      if (!isValidVideoId(song.videoId)) {
+        return NextResponse.json({ error: 'Invalid video ID format' }, { status: 400 });
+      }
+
+      // Prevent queue flooding
+      const currentParty = partyStore.get(partyId);
+      if (currentParty.queue.length >= MAX_QUEUE_SIZE) {
+        return NextResponse.json({ error: `Queue is full (max ${MAX_QUEUE_SIZE} songs)` }, { status: 429 });
+      }
+
+      // Check concurrent job capacity
+      if (!canStartJob()) {
+        return NextResponse.json({ error: 'Server is busy. Please wait for current songs to finish processing.' }, { status: 429 });
+      }
+
       const jobId = crypto.randomUUID();
       const uploadDir = path.join(process.cwd(), 'uploads', jobId);
       fs.mkdirSync(uploadDir, { recursive: true });
       jobQueue.set(jobId, { status: 'processing', progress: 0, message: 'Starting job...' });
 
-      const url = new URL(request.url);
-      const baseUrl = `${url.protocol}//${url.host}`;
+      // SECURITY: Use hardcoded localhost to prevent SSRF via Host header
+      const baseUrl = process.env.INTERNAL_BASE_URL || 'http://127.0.0.1:3000';
       
       // Start the Demucs and Whisper job instantly in the background!
       runBackgroundSeparation(song, jobId, uploadDir, baseUrl).catch(err => {
         console.error("Background separation error:", err);
         const existing = jobQueue.get(jobId);
         if (existing?.status !== 'error') {
-          jobQueue.update(jobId, { status: 'error', error: err.message });
+          jobQueue.update(jobId, { status: 'error', error: 'Processing failed. Please try again.' });
         }
       });
 
@@ -94,7 +125,8 @@ export async function POST(request) {
     return NextResponse.json(updatedParty);
 
   } catch (error) {
+    // SECURITY: Don't leak internal error details to the client
     console.error('Party API Error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'An internal error occurred' }, { status: 500 });
   }
 }

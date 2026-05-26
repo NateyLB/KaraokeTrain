@@ -252,3 +252,8 @@ input[type="number"]::-webkit-outer-spin-button {
 input[type="number"] {
   -moz-appearance: textfield; /* Firefox */
 }
+
+/* Spinner animation (moved here from inline dangerouslySetInnerHTML for security) */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

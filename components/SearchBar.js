@@ -84,7 +84,7 @@ export default function SearchBar({ onSelect }) {
               animation: 'spin 0.8s linear infinite'
             }} />
             <p className="body-text" style={{ marginTop: '1rem' }}>Searching YouTube...</p>
-            <style dangerouslySetInnerHTML={{ __html: `@keyframes spin { to { transform: rotate(360deg); } }` }} />
+            {/* spin keyframe is defined in globals.css */}
           </div>
         )}
 

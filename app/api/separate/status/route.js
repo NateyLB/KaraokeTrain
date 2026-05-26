@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
 import { jobQueue } from '../../../../lib/jobQueue';
+import { isValidJobId } from '../../../../lib/validators';
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const jobId = searchParams.get('jobId');
 
-  if (!jobId) {
-    return NextResponse.json({ error: 'jobId is required' }, { status: 400 });
+  if (!jobId || !isValidJobId(jobId)) {
+    return NextResponse.json({ error: 'A valid jobId is required' }, { status: 400 });
   }
 
   const status = jobQueue.get(jobId);

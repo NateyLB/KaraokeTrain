@@ -37,6 +37,6 @@ export async function GET(request) {
     return Response.json({ lyrics });
   } catch (error) {
     console.error('Lyrics fetch error:', error);
-    return Response.json({ lyrics: null }, { status: 200 }); // Fail gracefully
+    return Response.json({ lyrics: null }, { status: 200 }); // Fail gracefully, don't expose internals
   }
 }

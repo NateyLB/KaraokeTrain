@@ -482,7 +482,7 @@ export default function RoomPage({ params }) {
                 <Loader2 size={64} style={{ animation: 'spin 1.2s linear infinite', color: 'var(--primary-accent)', marginBottom: '1.5rem' }} />
                 <h2 className="heading-2 text-gradient" style={{ marginBottom: '0.5rem' }}>Loading Next Song...</h2>
                 <p className="body-text" style={{ fontSize: '1.1rem', opacity: 0.8 }}>{loadingStatus}</p>
-                <style dangerouslySetInnerHTML={{ __html: `@keyframes spin { to { transform: rotate(360deg); } }` }} />
+                {/* spin keyframe is defined in globals.css */}
             </div>
         </div>
       </div>
