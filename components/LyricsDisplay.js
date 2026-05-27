@@ -87,8 +87,15 @@ export default function LyricsDisplay({ lyrics, currentTime }) {
           let activeWords = line.words || [];
           
           if (activeWords.length > 0 && activeWords[0].start != null && activeWords[activeWords.length - 1].end != null) {
-              trueStartTime = activeWords[0].start;
-              trueEndTime = activeWords[activeWords.length - 1].end;
+              // SANITY CHECK: If Whisper's alignment is wildly disconnected from the official LRCLIB timestamp,
+              // it means Whisper hallucinated or aligned to the wrong phrase. We throw away the bad Whisper data
+              // and fall back to perfectly-anchored synthetic highlighting for this specific line.
+              if (Math.abs(activeWords[0].start - line.time) > 2.0) {
+                  activeWords = [];
+              } else {
+                  trueStartTime = activeWords[0].start;
+                  trueEndTime = activeWords[activeWords.length - 1].end;
+              }
           }
           
           const duration = trueEndTime - trueStartTime;

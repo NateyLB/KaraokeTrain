@@ -36,11 +36,21 @@ def main():
     except Exception:
         pass
 
+    # Construct an initial prompt to bias Whisper toward the correct lyrics/vocabulary
+    prompt_text = "Vocals, singing, clear lyrics."
+    if lrclib_data:
+        lyrics_sample = " ".join([l.get("text", "") for l in lrclib_data[:15] if l.get("text")]).strip()
+        if lyrics_sample:
+            prompt_text = lyrics_sample
+
     segments_gen, _ = model.transcribe(
         args.wav, 
         word_timestamps=True, 
         condition_on_previous_text=False, 
-        no_speech_threshold=0.9
+        no_speech_threshold=0.9,
+        vad_filter=True,
+        vad_parameters=dict(min_silence_duration_ms=500),
+        initial_prompt=prompt_text
     )
     
     whisper_segments = []
