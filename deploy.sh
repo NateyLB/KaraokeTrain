@@ -21,6 +21,7 @@ gcloud run deploy $SERVICE_NAME \
   --allow-unauthenticated \
   --memory 4Gi \
   --cpu 2 \
+  --no-cpu-throttling \
   --timeout 3600 \
   --set-env-vars="STORAGE_MODE=gcs,GCS_BUCKET_NAME=$BUCKET_NAME"
 
