@@ -104,16 +104,17 @@ export function useAudioAnalyzer() {
     try {
       // Prevent double-start leaks
       if (streamRef.current) return;
+      streamRef.current = 'pending';
       
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
-          noiseSuppression: false,  // keep false — noise suppression can distort pitch
-          autoGainControl: false,   // keep false — prevents mic level from jumping
+          noiseSuppression: false,
+          autoGainControl: false,
         },
       });
       
-      if (!isMounted.current) {
+      if (!isMounted.current || streamRef.current === false) {
         stream.getTracks().forEach(t => t.stop());
         return;
       }
@@ -174,16 +175,17 @@ export function useAudioAnalyzer() {
       pitchHistoryRef.current = [];
       analyzeAudio();
     } catch (err) {
+      streamRef.current = null;
       setError('Microphone access denied. Please allow it in your browser settings.');
     }
   };
 
   const stopListening = () => {
     if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-    if (streamRef.current) {
+    if (streamRef.current && streamRef.current !== 'pending') {
       streamRef.current.getTracks().forEach(t => t.stop());
-      streamRef.current = null;
     }
+    streamRef.current = false; // Prevents pending getUserMedia from resolving and attaching
     if (sourceRef.current) {
       sourceRef.current.disconnect();
     }

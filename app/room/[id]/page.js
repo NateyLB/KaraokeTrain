@@ -6,8 +6,7 @@ import LyricsDisplay from '../../../components/LyricsDisplay';
 import AudioVisualizer from '../../../components/AudioVisualizer';
 import SearchBar from '../../../components/SearchBar';
 import { parseLRC } from '../../../lib/lyrics';
-import { BasicPitch, outputToNotesPoly, noteFramesToTime } from '@spotify/basic-pitch';
-import { X, Search, ArrowLeft, Mic, MicOff, Music, Gamepad2, Volume2, QrCode, Loader2, Play, Trash2, ChevronUp, ChevronDown, Waves, Sparkles, AlertCircle } from 'lucide-react';
+import { X, Search, ArrowLeft, Mic, MicOff, Music, Gamepad2, Volume2, VolumeX, QrCode, Loader2, Play, Trash2, ChevronUp, ChevronDown, Waves, Sparkles, AlertCircle } from 'lucide-react';
 import { useAudioAnalyzer } from '../../../hooks/useAudioAnalyzer';
 
 function formatTime(seconds) {
@@ -52,7 +51,6 @@ export default function RoomPage({ params }) {
   const [vocalsVolume, setVocalsVolume] = useState(1.0);
   const timeUpdateInterval = useRef(null);
   
-  const [gameModeEnabled, setGameModeEnabled] = useState(false);
   const [echoOn, setEchoOn] = useState(false);
   const [autoTuneOn, setAutoTuneOn] = useState(false);
 
@@ -158,9 +156,8 @@ export default function RoomPage({ params }) {
           const fetchStem = async (stemName) => {
               const res = await fetch(`/api/stems?jobId=${readySong.jobId}&stem=${stemName}`);
               if (!res.ok) throw new Error(`Failed to download ${stemName}`);
-              const buffer = await res.arrayBuffer();
-              const blob = new Blob([buffer], { type: 'audio/wav' });
-              return { url: URL.createObjectURL(blob), buffer };
+              const blob = await res.blob();
+              return { url: URL.createObjectURL(blob) };
           };
 
           Promise.all([
@@ -249,7 +246,7 @@ export default function RoomPage({ params }) {
         
         if (prefetchedBlobs.current[song.jobId]) {
             // Use background cached versions!
-            vocalsData = { url: prefetchedBlobs.current[song.jobId].vocals, buffer: prefetchedBlobs.current[song.jobId].vocalBuffer };
+            vocalsData = { url: prefetchedBlobs.current[song.jobId].vocals };
             noVocalsData = { url: prefetchedBlobs.current[song.jobId].no_vocals };
         } else {
             setLoadingStatus('Downloading high-quality audio stems (this may take a moment)...');
@@ -257,9 +254,8 @@ export default function RoomPage({ params }) {
             const fetchStem = async (stemName) => {
                 const res = await fetch(`/api/stems?jobId=${song.jobId}&stem=${stemName}`);
                 if (!res.ok) throw new Error(`Failed to download ${stemName}`);
-                const buffer = await res.arrayBuffer();
-                const blob = new Blob([buffer], { type: 'audio/wav' });
-                return { url: URL.createObjectURL(blob), buffer };
+                const blob = await res.blob();
+                return { url: URL.createObjectURL(blob) };
             };
 
             [vocalsData, noVocalsData] = await Promise.all([
@@ -276,51 +272,7 @@ export default function RoomPage({ params }) {
         };
         setStems(outputStems);
 
-        // 3. Extract True Pitch (Runs entirely in background so playback isn't blocked!)
-        (async () => {
-            try {
-                const basicPitch = new BasicPitch('https://unpkg.com/@spotify/basic-pitch@1.0.1/model/model.json');
-                
-                const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 22050 });
-                // Reuse the buffer we already downloaded instead of fetching again!
-                // Slice it to avoid neutering the original buffer if the browser shares memory
-                const vocalAudioBuffer = await audioCtx.decodeAudioData(vocalsData.buffer.slice(0));
-                
-                let monoAudioBuffer = vocalAudioBuffer;
-                if (vocalAudioBuffer.numberOfChannels > 1) {
-                    monoAudioBuffer = audioCtx.createBuffer(1, vocalAudioBuffer.length, vocalAudioBuffer.sampleRate);
-                    const monoData = monoAudioBuffer.getChannelData(0);
-                    const leftData = vocalAudioBuffer.getChannelData(0);
-                    const rightData = vocalAudioBuffer.getChannelData(1);
-                    for (let i = 0; i < vocalAudioBuffer.length; i++) {
-                        monoData[i] = (leftData[i] + rightData[i]) / 2;
-                    }
-                }
-                
-                // Don't await this! Let it run in the background.
-                basicPitch.evaluateModel(
-                  monoAudioBuffer,
-                  (framesData, onsets, contours) => {
-                     const noteEvents = outputToNotesPoly(framesData, onsets, 0.25, 0.25, 5);
-                     const noteTimes = noteFramesToTime(noteEvents);
-                     
-                     const notes = noteTimes.map(n => ({
-                        midi: Math.round(n.pitchMidi),
-                        startTime: n.startTimeSeconds,
-                        endTime: n.startTimeSeconds + n.durationSeconds,
-                        amplitude: n.amplitude
-                     })).filter(n => n.amplitude > 0.2);
-                     
-                     if (notes.length > 0) setGuideNotes(notes);
-                  },
-                  (pitchPercentages) => { }
-                ).catch(err => console.error("BasicPitch error:", err));
-            } catch (e) {
-                console.error("Failed to start BasicPitch extraction", e);
-            }
-        })();
-
-        if (setupJobIdRef.current !== song.jobId) return;
+        // Removed BasicPitch logic to prevent UI freezing
 
         // 4. Set Lyrics from Background or Run Fallback
         if (backgroundLyrics) {
@@ -702,18 +654,8 @@ export default function RoomPage({ params }) {
             {isPlaying ? 'Pause' : 'Start Singing'}
          </button>
          <button onClick={() => setVocalsEnabled(!vocalsEnabled)} className="btn-secondary" style={{ padding: '0.75rem 1.5rem', borderRadius: '99px', fontSize: '1.1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: vocalsEnabled ? 1 : 0.7 }}>
-            {vocalsEnabled ? <Mic size={20} /> : <MicOff size={20} />}
-            {vocalsEnabled ? 'Vocals On' : 'Vocals Off'}
-         </button>
-         <button onClick={() => {
-             const nextState = !gameModeEnabled;
-             setGameModeEnabled(nextState);
-             if (nextState && !isListening) {
-                 startListening();
-             }
-         }} className="btn-secondary" style={{ padding: '0.75rem 1.5rem', borderRadius: '99px', fontSize: '1.1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: gameModeEnabled ? 1 : 0.7 }}>
-            <Gamepad2 size={20} />
-            {gameModeEnabled ? 'Game On' : 'Game Off'}
+            {vocalsEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
+            {vocalsEnabled ? 'Singer On' : 'Singer Off'}
          </button>
          <button onClick={() => {
              if (parsedLyrics.length > 0) {
@@ -786,10 +728,6 @@ export default function RoomPage({ params }) {
         )}
       </div>
 
-      <div style={{ marginTop: 'auto', paddingBottom: '1rem', display: gameModeEnabled ? 'block' : 'none' }}>
-        <AudioVisualizer lyrics={parsedLyrics} currentSongTime={currentSongTime} guideNotes={guideNotes} isListening={isListening} pitch={pitch} volume={micVolume} />
-      </div>
-
       {/* Floating Microphone Card */}
       <div style={{
           position: 'fixed',
@@ -813,10 +751,9 @@ export default function RoomPage({ params }) {
              </h4>
              <button
                onClick={() => {
-                   if (gameModeEnabled) return;
                    isListening ? stopListening() : startListening();
                }}
-               title={gameModeEnabled ? "Microphone must be on while Game is active" : "Toggle Microphone"}
+               title="Toggle Microphone"
                style={{
                  width: '40px',
                  height: '40px',
@@ -826,8 +763,7 @@ export default function RoomPage({ params }) {
                  display: 'flex',
                  alignItems: 'center',
                  justifyContent: 'center',
-                 cursor: gameModeEnabled ? 'not-allowed' : 'pointer',
-                 opacity: gameModeEnabled ? 0.5 : 1,
+                 cursor: 'pointer',
                  transition: 'all 0.2s ease',
                }}
              >
