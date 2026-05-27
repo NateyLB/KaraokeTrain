@@ -28,7 +28,7 @@ export default function LyricsDisplay({ lyrics, currentTime }) {
       const container = containerRef.current;
       const element = activeLineRef.current;
       
-      const targetScroll = element.offsetTop - (container.clientHeight / 2) + (element.clientHeight / 2);
+      const targetScroll = element.offsetTop - (container.clientHeight * 0.30) + (element.clientHeight / 2);
       setOffsetY(-targetScroll);
     }
   }, [activeIndex]);
@@ -45,11 +45,12 @@ export default function LyricsDisplay({ lyrics, currentTime }) {
     <div 
       ref={containerRef}
       style={{
-        height: '40vh',
+        height: '100%',
+        maxHeight: '25vh',
         overflow: 'hidden', // Disable native scroll, we use CSS transforms
         position: 'relative',
-        maskImage: 'linear-gradient(to bottom, transparent, black 10%, black 90%, transparent)',
-        WebkitMaskImage: 'linear-gradient(to bottom, transparent, black 10%, black 90%, transparent)',
+        maskImage: 'linear-gradient(to bottom, transparent 0%, black 20%, black 85%, transparent 100%)',
+        WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 20%, black 85%, transparent 100%)',
         padding: '2rem 1rem'
       }}
       className="lyrics-container"

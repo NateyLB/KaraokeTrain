@@ -6,8 +6,9 @@ import LyricsDisplay from '../../../components/LyricsDisplay';
 import AudioVisualizer from '../../../components/AudioVisualizer';
 import SearchBar from '../../../components/SearchBar';
 import { parseLRC } from '../../../lib/lyrics';
-import { X, Search, ArrowLeft, Mic, MicOff, Music, Gamepad2, Volume2, VolumeX, QrCode, Loader2, Play, Trash2, ChevronUp, ChevronDown, Waves, Sparkles, AlertCircle } from 'lucide-react';
+import { X, Search, ArrowLeft, Mic, MicOff, Music, Gamepad2, Volume2, VolumeX, QrCode, Loader2, Play, Pause, Trash2, ChevronUp, ChevronDown, Waves, Sparkles, AlertCircle, Video } from 'lucide-react';
 import { useAudioAnalyzer } from '../../../hooks/useAudioAnalyzer';
+import YouTube from 'react-youtube';
 
 function formatTime(seconds) {
   if (!seconds || isNaN(seconds)) return "0:00";
@@ -47,9 +48,12 @@ export default function RoomPage({ params }) {
 
   const [lyricsOffset, setLyricsOffset] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [vocalsEnabled, setVocalsEnabled] = useState(false);
+  const [vocalsEnabled, setVocalsEnabled] = useState(true);
   const [vocalsVolume, setVocalsVolume] = useState(1.0);
+  const [isVideoVisible, setIsVideoVisible] = useState(false);
   const timeUpdateInterval = useRef(null);
+  const ytPlayerRef = useRef(null);
+  const isPlayingRef = useRef(false);
   
   const [echoOn, setEchoOn] = useState(false);
   const [autoTuneOn, setAutoTuneOn] = useState(false);
@@ -361,6 +365,7 @@ export default function RoomPage({ params }) {
       Object.values(audioRefs.current).forEach(audio => {
           if (audio) audio.pause();
       });
+      if (ytPlayerRef.current) ytPlayerRef.current.pauseVideo();
       clearInterval(timeUpdateInterval.current);
       setIsPlaying(false);
     } else {
@@ -371,9 +376,22 @@ export default function RoomPage({ params }) {
              audioRefs.current[stemKey].muted = !vocalsEnabled;
              audioRefs.current[stemKey].volume = vocalsVolume;
            }
-           audioRefs.current[stemKey].play().catch(e => console.error("Play prevented", e));
         }
       });
+      
+      setIsPlaying(true);
+      isPlayingRef.current = true; // Sync update for the YouTube event listener
+      
+      // Slave the local audio to the YouTube player's buffering state!
+      if (ytPlayerRef.current) {
+          ytPlayerRef.current.playVideo();
+      } else {
+          allStems.forEach(stemKey => {
+             if (audioRefs.current[stemKey]) {
+                 audioRefs.current[stemKey].play().catch(e => console.error("Play prevented", e));
+             }
+          });
+      }
       
       timeUpdateInterval.current = setInterval(() => {
         if (audioRefs.current['no_vocals']) {
@@ -385,8 +403,6 @@ export default function RoomPage({ params }) {
           }
         }
       }, 50);
-      
-      setIsPlaying(true);
     }
   };
 
@@ -649,68 +665,76 @@ export default function RoomPage({ params }) {
         ))}
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-         <button onClick={togglePlay} className="btn-primary" style={{ padding: '0.75rem 2rem', borderRadius: '99px', fontSize: '1.1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Music size={20} />
-            {isPlaying ? 'Pause' : 'Start Singing'}
-         </button>
-         <button onClick={() => setVocalsEnabled(!vocalsEnabled)} className="btn-secondary" style={{ padding: '0.75rem 1.5rem', borderRadius: '99px', fontSize: '1.1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: vocalsEnabled ? 1 : 0.7 }}>
-            {vocalsEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
-            {vocalsEnabled ? 'Singer On' : 'Singer Off'}
-         </button>
-         <button onClick={() => {
-             if (parsedLyrics.length > 0) {
-                 const firstValidLine = parsedLyrics.find(l => l.text.trim().length > 0) || parsedLyrics[0];
-                 setLyricsOffset((currentSongTime - firstValidLine.time).toFixed(2));
-             }
-         }} className="btn-secondary" style={{ padding: '0.75rem 1.5rem', borderRadius: '99px', fontSize: '1.1rem', fontWeight: 600 }} title="Click right when singing starts to align lyrics">
-            Align Start
-         </button>
-         {(() => {
-             const firstValidTime = (parsedLyrics.find(l => l.text.trim().length > 0) || parsedLyrics[0])?.time || 0;
-             const displayTime = ((Number(lyricsOffset) || 0) + firstValidTime).toFixed(2);
-             
-             return lyricsOffset !== 0 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--glass-bg)', padding: '0 1rem', borderRadius: '99px', border: '1px solid var(--glass-border)' }}>
-                  <button onClick={() => setLyricsOffset(o => Math.round(((Number(o) || 0) - 0.5) * 100) / 100)} style={{ color: 'white', padding: '0.5rem', fontWeight: 'bold', background: 'transparent', border: 'none', cursor: 'pointer' }}>-</button>
-                  <div style={{ display: 'flex', alignItems: 'center' }}>
-                      <span style={{ fontSize: '0.9rem', opacity: 0.8 }}>Start Time: </span>
-                     <input 
-                         type="number" 
-                         step="0.1" 
-                         value={displayTime} 
-                         onChange={(e) => {
-                             const newStart = parseFloat(e.target.value);
-                             if (!isNaN(newStart)) {
-                                 setLyricsOffset(newStart - firstValidTime);
-                             }
-                         }}
-                         onBlur={(e) => {
-                             if (e.target.value === "" || e.target.value === "-") {
-                                 setLyricsOffset(0);
-                             }
-                         }}
-                         style={{ 
-                             width: '3.5rem', 
-                             background: 'transparent', 
-                             border: 'none', 
-                             color: 'white', 
-                             fontSize: '0.9rem', 
-                             textAlign: 'center',
-                             outline: 'none',
-                             fontFamily: 'inherit'
-                         }} 
-                     />
-                     <span style={{ fontSize: '0.9rem', opacity: 0.8 }}>s</span>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
+         <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem' }}>
+             <button onClick={togglePlay} className="btn-primary" style={{ padding: '0.75rem', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '3.2rem', height: '3.2rem' }} title={isPlaying ? 'Pause' : 'Play'}>
+                {isPlaying ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" style={{ marginLeft: '0.2rem' }} />}
+             </button>
+             <button onClick={() => setVocalsEnabled(!vocalsEnabled)} className="btn-secondary" style={{ padding: '0.75rem 1.5rem', borderRadius: '99px', fontSize: '1.1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: vocalsEnabled ? 1 : 0.7 }}>
+                {vocalsEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
+                {vocalsEnabled ? 'Vocals On' : 'Vocals Off'}
+             </button>
+             <button onClick={() => setIsVideoVisible(!isVideoVisible)} className="btn-secondary" style={{ padding: '0.75rem 1.5rem', borderRadius: '99px', fontSize: '1.1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: isVideoVisible ? 1 : 0.7 }}>
+                <Video size={20} />
+                {isVideoVisible ? 'Hide Video' : 'Show Video'}
+             </button>
+         </div>
+         
+         <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem' }}>
+             <button onClick={() => {
+                 if (parsedLyrics.length > 0) {
+                     const firstValidLine = parsedLyrics.find(l => l.text.trim().length > 0) || parsedLyrics[0];
+                     setLyricsOffset((currentSongTime - firstValidLine.time).toFixed(2));
+                 }
+             }} className="btn-secondary" style={{ padding: '0.75rem 1.5rem', borderRadius: '99px', fontSize: '1.1rem', fontWeight: 600 }} title="Click right when singing starts to align lyrics">
+                Align Start
+             </button>
+             {(() => {
+                 const firstValidTime = (parsedLyrics.find(l => l.text.trim().length > 0) || parsedLyrics[0])?.time || 0;
+                 const displayTime = ((Number(lyricsOffset) || 0) + firstValidTime).toFixed(2);
+                 
+                 return lyricsOffset !== 0 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--glass-bg)', padding: '0 1rem', borderRadius: '99px', border: '1px solid var(--glass-border)' }}>
+                      <button onClick={() => setLyricsOffset(o => Math.round(((Number(o) || 0) - 0.5) * 100) / 100)} style={{ color: 'white', padding: '0.5rem', fontWeight: 'bold', background: 'transparent', border: 'none', cursor: 'pointer' }}>-</button>
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                          <span style={{ fontSize: '0.9rem', opacity: 0.8 }}>Start Time: </span>
+                         <input 
+                             type="number" 
+                             step="0.1" 
+                             value={displayTime} 
+                             onChange={(e) => {
+                                 const newStart = parseFloat(e.target.value);
+                                 if (!isNaN(newStart)) {
+                                     setLyricsOffset(newStart - firstValidTime);
+                                 }
+                             }}
+                             onBlur={(e) => {
+                                 if (e.target.value === "" || e.target.value === "-") {
+                                     setLyricsOffset(0);
+                                 }
+                             }}
+                             style={{ 
+                                 width: '3.5rem', 
+                                 background: 'transparent', 
+                                 border: 'none', 
+                                 color: 'white', 
+                                 fontSize: '0.9rem', 
+                                 textAlign: 'center',
+                                 outline: 'none',
+                                 fontFamily: 'inherit'
+                             }} 
+                         />
+                         <span style={{ fontSize: '0.9rem', opacity: 0.8 }}>s</span>
+                      </div>
+                      <button onClick={() => setLyricsOffset(o => Math.round(((Number(o) || 0) + 0.5) * 100) / 100)} style={{ color: 'white', padding: '0.5rem', fontWeight: 'bold', background: 'transparent', border: 'none', cursor: 'pointer' }}>+</button>
+                      <button onClick={() => setLyricsOffset(0)} style={{ color: 'var(--secondary-accent)', padding: '0.5rem', marginLeft: '0.25rem', fontSize: '0.8rem', fontWeight: 'bold', background: 'transparent', border: 'none', cursor: 'pointer' }}>Reset</button>
                   </div>
-                  <button onClick={() => setLyricsOffset(o => Math.round(((Number(o) || 0) + 0.5) * 100) / 100)} style={{ color: 'white', padding: '0.5rem', fontWeight: 'bold', background: 'transparent', border: 'none', cursor: 'pointer' }}>+</button>
-                  <button onClick={() => setLyricsOffset(0)} style={{ color: 'var(--secondary-accent)', padding: '0.5rem', marginLeft: '0.25rem', fontSize: '0.8rem', fontWeight: 'bold', background: 'transparent', border: 'none', cursor: 'pointer' }}>Reset</button>
-              </div>
-             );
-         })()}
-         <button onClick={handleNextSong} className="btn-secondary" style={{ padding: '0.75rem 1.5rem', borderRadius: '99px', fontSize: '1.1rem', fontWeight: 600 }}>
-            Next Song
-         </button>
+                 );
+             })()}
+             <button onClick={handleNextSong} className="btn-secondary" style={{ padding: '0.75rem 1.5rem', borderRadius: '99px', fontSize: '1.1rem', fontWeight: 600 }}>
+                Next Song
+             </button>
+         </div>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0 2rem', marginBottom: '1rem' }}>
@@ -719,11 +743,61 @@ export default function RoomPage({ params }) {
             const newTime = parseFloat(e.target.value);
             setCurrentSongTime(newTime);
             Object.values(audioRefs.current).forEach(audio => { if (audio) audio.currentTime = newTime; });
+            if (ytPlayerRef.current) ytPlayerRef.current.seekTo(newTime, true);
         }} style={{ flex: 1, accentColor: 'var(--primary-accent)', cursor: 'pointer' }} />
         <span className="body-text" style={{ fontSize: '0.9rem', minWidth: '2.5rem' }}>{formatTime(duration)}</span>
       </div>
 
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative', marginTop: '2rem' }}>
+      {/* Always render YouTube component to keep it synced, but hide it visually if toggled off */}
+      {song && song.jobId && (
+        <div style={{ display: isVideoVisible ? 'flex' : 'none', justifyContent: 'center', padding: '0 2rem', marginBottom: '1rem', pointerEvents: 'none' }}>
+          <YouTube 
+            videoId={song.jobId} 
+            opts={{
+                height: '315',
+                width: '560',
+                playerVars: {
+                    autoplay: 0,
+                    controls: 0,
+                    disablekb: 1,
+                    fs: 0,
+                    modestbranding: 1,
+                    rel: 0
+                }
+            }}
+            onReady={(event) => {
+                ytPlayerRef.current = event.target;
+                event.target.mute(); // Mute YouTube so it doesn't clash with Karaoke audio stems
+                if (isPlaying) {
+                    event.target.playVideo();
+                }
+            }}
+            onStateChange={(event) => {
+                // 1 = PLAYING, 2 = PAUSED, 3 = BUFFERING
+                if (event.data === 1 && isPlayingRef.current) {
+                    // YouTube finished buffering and started playing. Start local audio!
+                    const allStems = ['vocals', 'no_vocals'];
+                    allStems.forEach(stemKey => {
+                        if (audioRefs.current[stemKey] && audioRefs.current[stemKey].paused) {
+                            audioRefs.current[stemKey].play().catch(e => console.error("Play prevented", e));
+                        }
+                    });
+                } else if (event.data === 3 || event.data === 2) {
+                    // YouTube is buffering or paused. Pause local audio to keep it in sync.
+                    const allStems = ['vocals', 'no_vocals'];
+                    allStems.forEach(stemKey => {
+                        if (audioRefs.current[stemKey] && !audioRefs.current[stemKey].paused) {
+                            audioRefs.current[stemKey].pause();
+                        }
+                    });
+                }
+            }}
+            style={{ borderRadius: '1rem', overflow: 'hidden', border: '1px solid var(--glass-border)', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}
+          />
+        </div>
+      )}
+
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative', marginTop: isVideoVisible ? '0' : '2rem', width: '100%' }}>
         {parsedLyrics.length > 0 && (
           <LyricsDisplay lyrics={parsedLyrics} currentTime={Math.max(0, currentSongTime - (Number(lyricsOffset) || 0))} />
         )}
