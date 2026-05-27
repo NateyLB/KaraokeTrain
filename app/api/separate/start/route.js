@@ -94,7 +94,7 @@ export async function runBackgroundSeparation(song, jobId, uploadDir, baseUrl = 
       ytdlp.stderr.on('data', (data) => { stderrOutput += data.toString(); });
       ytdlp.on('close', (code) => {
         if (code === 0) resolve();
-        else reject(new Error(`yt-dlp exited with code ${code}`));
+        else reject(new Error(`yt-dlp exited with code ${code}. Error: ${stderrOutput}`));
       });
       ytdlp.on('error', reject);
     });

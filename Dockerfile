@@ -22,7 +22,7 @@ RUN pip install --no-cache-dir \
 RUN pip install --no-cache-dir \
     demucs \
     faster-whisper \
-    yt-dlp==2024.12.23
+    yt-dlp
 
 # Set the Python path for the Node app
 ENV PYTHON_BIN_PATH="/opt/venv/bin/python3"
