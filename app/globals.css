@@ -165,9 +165,9 @@ button {
 /* Layout Utilities */
 .container {
   width: 100%;
-  max-width: 600px; /* Mobile first max-width for web */
+  max-width: 1200px; /* Expanded for desktop layout */
   margin: 0 auto;
-  padding: var(--spacing-md);
+  padding: 0; /* Removing container padding so edge-to-edge UI works perfectly */
   min-height: 100vh;
   display: flex;
   flex-direction: column;

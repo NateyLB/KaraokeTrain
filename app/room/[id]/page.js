@@ -58,6 +58,30 @@ export default function RoomPage({ params }) {
   const [echoOn, setEchoOn] = useState(false);
   const [autoTuneOn, setAutoTuneOn] = useState(false);
 
+  const [micPos, setMicPos] = useState({ x: 16, y: 80 });
+  const isDraggingMic = useRef(false);
+  const dragStartPos = useRef({ x: 0, y: 0 });
+
+  const handlePointerDown = (e) => {
+      if (e.target.tagName.toLowerCase() === 'input' || e.target.tagName.toLowerCase() === 'button' || e.target.closest('button')) return;
+      isDraggingMic.current = true;
+      dragStartPos.current = { x: e.clientX - micPos.x, y: e.clientY - micPos.y };
+      e.target.setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e) => {
+      if (!isDraggingMic.current) return;
+      setMicPos({
+          x: e.clientX - dragStartPos.current.x,
+          y: e.clientY - dragStartPos.current.y
+      });
+  };
+
+  const handlePointerUp = (e) => {
+      isDraggingMic.current = false;
+      e.target.releasePointerCapture(e.pointerId);
+  };
+
   const { isListening, volume: micVolume, pitch, startListening, stopListening, setMicVolume, setEchoEnabled, setVocoderTargetFrequency, error: micError } = useAudioAnalyzer();
 
   // Handle Echo Toggling
@@ -530,7 +554,7 @@ export default function RoomPage({ params }) {
                         </div>
                         <div style={{ marginRight: '1rem', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.25rem', minWidth: '4rem' }}>
                            <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', padding: '0.2rem 0.4rem', borderRadius: '4px', background: qSong.jobStatus?.status === 'ready' ? 'rgba(0,255,0,0.1)' : 'var(--glass-bg)', color: qSong.jobStatus?.status === 'ready' ? '#4ade80' : 'var(--text-muted)' }}>
-                             {qSong.jobStatus?.status === 'processing' ? `${Math.round(qSong.jobStatus.progress || 0)}%` : (qSong.jobStatus?.status || 'pending')}
+                             {qSong.jobStatus?.status || 'pending'}
                            </div>
                            {qSong.jobStatus?.status === 'processing' && (
                              <div style={{ width: '100%', height: '4px', background: 'var(--glass-border)', borderRadius: '2px', overflow: 'hidden' }}>
@@ -641,13 +665,7 @@ export default function RoomPage({ params }) {
             <h2 className="heading-2" style={{ fontSize: '1.1rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{song.title}</h2>
             <p className="body-text" style={{ fontSize: '0.8rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{song.artist}</p>
           </div>
-          <div style={{ fontSize: '0.65rem', fontWeight: 'bold', textTransform: 'uppercase', padding: '0.2rem 0.5rem', borderRadius: '4px', border: lyricsSource.includes('Fallback') ? '1px solid #ef4444' : '1px solid var(--primary-accent)', color: lyricsSource.includes('Fallback') ? '#ef4444' : 'var(--primary-accent)', background: lyricsSource.includes('Fallback') ? 'rgba(239, 68, 68, 0.1)' : 'rgba(139, 92, 246, 0.1)' }}>
-            {lyricsSource}
-          </div>
         </div>
-        {song.art && (
-          <img src={song.art} alt="Thumbnail" style={{ width: '3rem', height: '2.25rem', borderRadius: 'var(--border-radius-sm)', objectFit: 'cover' }} />
-        )}
       </header>
 
       <div style={{ display: 'none' }}>
@@ -737,7 +755,7 @@ export default function RoomPage({ params }) {
          </div>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0 2rem', marginBottom: '1rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0 2rem', width: '100%', maxWidth: '900px', margin: '0 auto 1rem auto' }}>
         <span className="body-text" style={{ fontSize: '0.9rem', minWidth: '2.5rem', textAlign: 'right' }}>{formatTime(currentSongTime)}</span>
         <input type="range" min={0} max={duration || 100} value={currentSongTime} onChange={(e) => {
             const newTime = parseFloat(e.target.value);
@@ -749,22 +767,35 @@ export default function RoomPage({ params }) {
       </div>
 
       {/* Always render YouTube component to keep it synced, but hide it visually if toggled off */}
+      <style>{`
+        .responsive-youtube-iframe {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            border-radius: 0.5rem;
+        }
+      `}</style>
       {song && song.jobId && (
-        <div style={{ display: isVideoVisible ? 'flex' : 'none', justifyContent: 'center', padding: '0 2rem', marginBottom: '1rem', pointerEvents: 'none' }}>
-          <YouTube 
-            videoId={song.jobId} 
-            opts={{
-                height: '315',
-                width: '560',
-                playerVars: {
-                    autoplay: 0,
-                    controls: 0,
-                    disablekb: 1,
-                    fs: 0,
-                    modestbranding: 1,
-                    rel: 0
-                }
-            }}
+        <div style={{ display: isVideoVisible ? 'block' : 'none', width: '100%', maxWidth: '900px', margin: '0 auto 1rem auto', pointerEvents: 'none', padding: '0 2rem' }}>
+          <div style={{ position: 'relative', width: '100%', paddingBottom: '56.25%', height: 0, overflow: 'hidden' }}>
+            <YouTube 
+              videoId={song.jobId} 
+              opts={{
+                  height: '100%',
+                  width: '100%',
+                  playerVars: {
+                      autoplay: 0,
+                      controls: 0,
+                      disablekb: 1,
+                      fs: 0,
+                      modestbranding: 1,
+                      rel: 0
+                  }
+              }}
+              iframeClassName="responsive-youtube-iframe"
+              style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
             onReady={(event) => {
                 ytPlayerRef.current = event.target;
                 event.target.mute(); // Mute YouTube so it doesn't clash with Karaoke audio stems
@@ -794,6 +825,7 @@ export default function RoomPage({ params }) {
             }}
             style={{ borderRadius: '1rem', overflow: 'hidden', border: '1px solid var(--glass-border)', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}
           />
+          </div>
         </div>
       )}
 
@@ -804,21 +836,28 @@ export default function RoomPage({ params }) {
       </div>
 
       {/* Floating Microphone Card */}
-      <div style={{
+      <div 
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        style={{
           position: 'fixed',
-          top: '5rem',
-          left: '1rem',
+          top: micPos.y,
+          left: micPos.x,
           background: 'rgba(20, 20, 25, 0.95)',
           backdropFilter: 'blur(20px)',
           border: '1px solid var(--glass-border)',
           borderRadius: '1rem',
-          padding: '1.25rem',
+          padding: '0.8rem',
           display: 'flex',
           flexDirection: 'column',
-          gap: '1rem',
+          gap: '0.6rem',
           boxShadow: '0 1rem 2rem rgba(0,0,0,0.5)',
           zIndex: 50,
-          minWidth: '280px'
+          minWidth: '220px',
+          width: 'max-content',
+          cursor: isDraggingMic.current ? 'grabbing' : 'grab',
+          touchAction: 'none'
       }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
              <h4 style={{ fontSize: '1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
