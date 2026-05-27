@@ -86,7 +86,7 @@ export default function LyricsDisplay({ lyrics, currentTime }) {
           let trueEndTime = nextTime !== Infinity ? nextTime : line.time + 5;
           let activeWords = line.words || [];
           
-          if (activeWords.length > 0 && activeWords[0].start && activeWords[activeWords.length - 1].end) {
+          if (activeWords.length > 0 && activeWords[0].start != null && activeWords[activeWords.length - 1].end != null) {
               trueStartTime = activeWords[0].start;
               trueEndTime = activeWords[activeWords.length - 1].end;
           }
@@ -95,12 +95,12 @@ export default function LyricsDisplay({ lyrics, currentTime }) {
           
           if (activeWords.length === 0) {
               const wordsText = line.text.split(' ');
-              // Cap the synthetic duration to a reasonable max (e.g. 1.0s per word) 
-              // so words don't get stretched over massive instrumental breaks
-              const maxSyntheticDuration = wordsText.length * 1.0; 
-              const cappedDuration = Math.min(duration, maxSyntheticDuration);
+              const maxDuration = trueEndTime - trueStartTime;
+              // Highlight at a natural reading/singing speed (max 0.3s per word)
+              // This prevents the gradient from dragging slowly across gaps.
+              const syntheticDuration = Math.min(maxDuration, wordsText.length * 0.3);
               
-              const timePerWord = cappedDuration / Math.max(1, wordsText.length);
+              const timePerWord = syntheticDuration / Math.max(1, wordsText.length);
               activeWords = wordsText.map((w, i) => ({
                   word: w,
                   start: trueStartTime + (i * timePerWord),
@@ -108,8 +108,12 @@ export default function LyricsDisplay({ lyrics, currentTime }) {
               }));
           }
           let progress = 0;
-          if (currentTime >= trueStartTime && duration > 0) {
-              progress = (currentTime - trueStartTime) / duration;
+          if (currentTime >= trueStartTime) {
+              if (duration > 0) {
+                  progress = (currentTime - trueStartTime) / duration;
+              } else {
+                  progress = 1;
+              }
           }
           if (currentTime > trueEndTime) progress = 1;
           progress = Math.max(0, Math.min(1, progress)) * 100;
@@ -117,7 +121,7 @@ export default function LyricsDisplay({ lyrics, currentTime }) {
           return (
             <div 
               key={index} 
-              ref={activeLineRef}
+              ref={isActive ? activeLineRef : null}
               className={styleClass.replace('animate-pulse-glow', '')} // Remove box-shadow glow
               style={{
                 ...customStyle, 
@@ -127,7 +131,7 @@ export default function LyricsDisplay({ lyrics, currentTime }) {
             >
               {activeWords.map((wObj, wIdx) => {
                 let wordProgress = 0;
-                if (wObj.start && wObj.end) {
+                if (wObj.start != null && wObj.end != null) {
                   const wDuration = wObj.end - wObj.start;
                   if (currentTime >= wObj.start && wDuration > 0) {
                       wordProgress = (currentTime - wObj.start) / wDuration;

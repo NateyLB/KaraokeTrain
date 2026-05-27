@@ -111,17 +111,13 @@ export default function RoomPage({ params }) {
     
     // If we are already processing or playing this exact job, don't restart!
     if (song.jobId === currentJobId) {
-        // If it's playing, check if it finished
-        if (duration > 0 && currentSongTime >= duration - 1) {
-            handleNextSong();
-        }
         return;
     }
 
     setCurrentJobId(song.jobId);
     setupRoom(song);
 
-  }, [partyState, currentJobId, duration, currentSongTime]);
+  }, [partyState, currentJobId]);
 
   const handleNextSong = async () => {
       Object.values(audioRefs.current).forEach(audio => {
@@ -381,7 +377,12 @@ export default function RoomPage({ params }) {
       
       timeUpdateInterval.current = setInterval(() => {
         if (audioRefs.current['no_vocals']) {
-          setCurrentSongTime(audioRefs.current['no_vocals'].currentTime);
+          const current = audioRefs.current['no_vocals'].currentTime;
+          setCurrentSongTime(current);
+          
+          if (audioRefs.current['no_vocals'].duration > 0 && current >= audioRefs.current['no_vocals'].duration - 1) {
+              handleNextSong();
+          }
         }
       }, 50);
       
