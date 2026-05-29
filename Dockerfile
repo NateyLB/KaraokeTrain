@@ -27,6 +27,10 @@ RUN pip install --no-cache-dir \
 # Set the Python path for the Node app
 ENV PYTHON_BIN_PATH="/opt/venv/bin/python3"
 
+# Set writable directories for PyTorch and HuggingFace models
+ENV TORCH_HOME=/app/models
+ENV HF_HOME=/app/models
+
 # Create a non-root user for security (M4)
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
@@ -46,8 +50,8 @@ COPY . .
 # Build the Next.js application
 RUN npm run build
 
-# Create uploads directory with correct permissions
-RUN mkdir -p /app/uploads && chown -R nextjs:nodejs /app/uploads
+# Create uploads and models directories with correct permissions
+RUN mkdir -p /app/uploads /app/models && chown -R nextjs:nodejs /app/uploads /app/models
 
 # Switch to non-root user
 USER nextjs
