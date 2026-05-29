@@ -441,11 +441,23 @@ export default function RoomPage({ params }) {
 
     const handleTimeUpdate = () => {
       if (isSyncing) return;
-      const diff = Math.abs(leader.currentTime - follower.currentTime);
-      if (diff > 0.1) {
+      const diff = leader.currentTime - follower.currentTime;
+      const absDiff = Math.abs(diff);
+      
+      // Hard seek only if the difference is massive (e.g. user clicked the seekbar)
+      if (absDiff > 0.5) {
         isSyncing = true;
         follower.currentTime = leader.currentTime;
+        follower.playbackRate = 1.0;
         setTimeout(() => { isSyncing = false; }, 50);
+      } else if (absDiff > 0.1) {
+        // Soft sync: smoothly speed up or slow down to catch up without stuttering
+        follower.playbackRate = diff > 0 ? 1.05 : 0.95;
+      } else {
+        // Perfectly in sync
+        if (follower.playbackRate !== 1.0) {
+            follower.playbackRate = 1.0;
+        }
       }
     };
 

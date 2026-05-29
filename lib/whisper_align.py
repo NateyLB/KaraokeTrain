@@ -13,7 +13,7 @@ def main():
     parser.add_argument('--lyrics_file', required=False, default="")
     args = parser.parse_args()
     
-    model = WhisperModel("base", device="cpu", compute_type="int8")
+    model = WhisperModel("base", device="auto", compute_type="default")
     
     # If lyrics_file argument is passed, it is a JSON file
     lrclib_data = []

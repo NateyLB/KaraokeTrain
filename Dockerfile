@@ -14,9 +14,9 @@ ENV VIRTUAL_ENV=/opt/venv
 RUN python3 -m venv $VIRTUAL_ENV
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
-# 1. Install PyTorch CPU first (Pinned to 2.2.2 to prevent ABI bugs in newer torchaudio versions)
+# 1. Install PyTorch (Default PyPI wheels include CUDA 12 support for Cloud Run GPUs!)
 RUN pip install --no-cache-dir \
-    torch==2.2.2+cpu torchvision==0.17.2+cpu torchaudio==2.2.2+cpu --index-url https://download.pytorch.org/whl/cpu
+    torch==2.2.2 torchvision==0.17.2 torchaudio==2.2.2
 
 # 2. Install everything else (from default PyPI)
 # We must pin numpy < 2.0.0 because PyTorch 2.2.2 is not compatible with Numpy 2.x

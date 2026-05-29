@@ -165,7 +165,7 @@ export async function runBackgroundSeparation(song, jobId, uploadDir, baseUrl = 
       // Spawn demucs using the python path from env, or fallback to the local venv
       const defaultPythonPath = path.join(process.env.HOME || '', 'Desktop', 'GenAIProjects', 'MusicPractice', 'backend', '.venv', 'bin', 'python3');
       const pythonPath = process.env.PYTHON_BIN_PATH || defaultPythonPath;
-      const cmdArgs = ['-m', 'demucs', '--out', uploadDir, '-d', 'cpu', '--two-stems', 'vocals', inputPath];
+      const cmdArgs = ['-m', 'demucs', '--out', uploadDir, '--two-stems', 'vocals', inputPath];
       const demucsProcess = spawn(pythonPath, cmdArgs);
 
       let outputLines = [];
