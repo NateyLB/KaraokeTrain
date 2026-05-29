@@ -12,6 +12,7 @@
     "@google-cloud/storage": "^7.19.0",
     "@spotify/basic-pitch": "^1.0.1",
     "@supabase/supabase-js": "^2.106.1",
+    "express": "^5.2.1",
     "lucide-react": "^1.16.0",
     "next": "16.2.6",
     "play-dl": "^1.9.7",

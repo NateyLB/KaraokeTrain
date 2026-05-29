@@ -4,6 +4,7 @@ import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { Readable } from 'stream';
 import { jobQueue } from '../../../../lib/jobQueue';
 import { uploadDirectory, checkCache, uploadJson } from '../../../../lib/storage';
 import { isValidVideoId } from '../../../../lib/validators';
@@ -96,39 +97,65 @@ export async function runBackgroundSeparation(song, jobId, uploadDir, baseUrl = 
 
   startJob();
   try {
-    // 1. Download Audio (SECURITY: Using spawn instead of exec to prevent command injection)
+    // 1. Download Audio
     jobQueue.update(jobId, { message: 'Downloading high-quality audio...' });
-    await new Promise((resolve, reject) => {
-      const ytdlp = spawn('yt-dlp', [
-        '-f', 'bestaudio[ext=m4a]/bestaudio',
-        '-o', inputPath,
-        '--no-playlist',       // Never download playlists
-        '--max-filesize', '50m', // Limit file size to prevent disk exhaustion
-        '--force-overwrites',  // Always overwrite to prevent lingering 0-byte files from breaking it
-        url
-      ]);
-
-      let stderrOutput = '';
-      let stdoutOutput = '';
-      ytdlp.stdout.on('data', (data) => { stdoutOutput += data.toString(); });
-      ytdlp.stderr.on('data', (data) => { stderrOutput += data.toString(); });
-      ytdlp.on('close', (code) => {
-        if (code === 0) {
-          try {
-            const stats = fs.statSync(inputPath);
-            if (stats.size === 0) {
-              reject(new Error(`yt-dlp exited with code 0 but created a 0-byte file. stdout: ${stdoutOutput}. stderr: ${stderrOutput}`));
-            } else {
-              resolve();
-            }
-          } catch (e) {
-            reject(new Error(`yt-dlp failed to create file. stdout: ${stdoutOutput}. stderr: ${stderrOutput}`));
+    await new Promise(async (resolve, reject) => {
+      try {
+        if (process.env.DOWNLOADER_API_URL) {
+          console.log(`[Cloud Run] Fetching from Local Downloader API: ${process.env.DOWNLOADER_API_URL}/download?videoId=${song.videoId}`);
+          const res = await fetch(`${process.env.DOWNLOADER_API_URL}/download?videoId=${song.videoId}`);
+          if (!res.ok) {
+            throw new Error(`Downloader API returned ${res.status}: ${await res.text()}`);
           }
+          
+          const writeStream = fs.createWriteStream(inputPath);
+          const nodeStream = Readable.fromWeb(res.body);
+          
+          nodeStream.pipe(writeStream);
+          nodeStream.on('error', reject);
+          writeStream.on('error', reject);
+          writeStream.on('finish', () => {
+            const stats = fs.statSync(inputPath);
+            if (stats.size === 0) reject(new Error('Downloaded file is 0 bytes'));
+            else resolve();
+          });
+
         } else {
-          reject(new Error(`yt-dlp exited with code ${code}. Error: ${stderrOutput}`));
+          // Fallback to local yt-dlp execution (SECURITY: Using spawn to prevent command injection)
+          const ytdlp = spawn('yt-dlp', [
+            '-f', 'bestaudio[ext=m4a]/bestaudio',
+            '-o', inputPath,
+            '--no-playlist',
+            '--max-filesize', '50m',
+            '--force-overwrites',
+            url
+          ]);
+
+          let stderrOutput = '';
+          let stdoutOutput = '';
+          ytdlp.stdout.on('data', (data) => { stdoutOutput += data.toString(); });
+          ytdlp.stderr.on('data', (data) => { stderrOutput += data.toString(); });
+          ytdlp.on('close', (code) => {
+            if (code === 0) {
+              try {
+                const stats = fs.statSync(inputPath);
+                if (stats.size === 0) {
+                  reject(new Error(`yt-dlp exited with code 0 but created a 0-byte file.`));
+                } else {
+                  resolve();
+                }
+              } catch (e) {
+                reject(new Error(`yt-dlp failed to create file.`));
+              }
+            } else {
+              reject(new Error(`yt-dlp exited with code ${code}. Error: ${stderrOutput}`));
+            }
+          });
+          ytdlp.on('error', reject);
         }
-      });
-      ytdlp.on('error', reject);
+      } catch (err) {
+        reject(err);
+      }
     });
 
     // 2. Run Demucs

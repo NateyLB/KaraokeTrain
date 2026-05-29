@@ -192,7 +192,9 @@ export function useAudioAnalyzer() {
     if (vocoderOscRef.current) {
       try { vocoderOscRef.current.stop(); } catch(e){}
     }
-    if (audioContextRef.current) audioContextRef.current.close();
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      audioContextRef.current.close().catch(() => {});
+    }
     setIsListening(false);
     setVolume(0);
     setPitch(null);

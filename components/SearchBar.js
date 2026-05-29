@@ -94,7 +94,7 @@ export default function SearchBar({ onSelect }) {
 
         {!isSearching && results.map((track, i) => (
           <div
-            key={track.id}
+            key={track.videoId || i}
             className="glass-panel animate-fade-in"
             style={{
               display: 'flex',
