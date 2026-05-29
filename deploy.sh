@@ -24,8 +24,10 @@ gcloud run deploy $SERVICE_NAME \
   --platform managed \
   --region $REGION \
   --allow-unauthenticated \
-  --memory 4Gi \
-  --cpu 2 \
+  --memory 16Gi \
+  --cpu 4 \
+  --gpu 1 \
+  --gpu-type nvidia-l4 \
   --max-instances 1 \
   --no-cpu-throttling \
   --timeout 3600 \

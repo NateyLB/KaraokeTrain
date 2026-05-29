@@ -28,7 +28,9 @@ export default function LyricsDisplay({ lyrics, currentTime }) {
       const container = containerRef.current;
       const element = activeLineRef.current;
       
-      const targetScroll = element.offsetTop - (container.clientHeight * 0.30) + (element.clientHeight / 2);
+      // Anchor the active lyric at 25% from the top of the container
+      // This leaves room for 1 past line, and massive room for future lines!
+      const targetScroll = element.offsetTop - (container.clientHeight * 0.25) + (element.clientHeight / 2);
       setOffsetY(-targetScroll);
     }
   }, [activeIndex]);
@@ -42,19 +44,64 @@ export default function LyricsDisplay({ lyrics, currentTime }) {
   }
 
   return (
-    <div 
-      ref={containerRef}
-      style={{
-        height: '100%',
-        maxHeight: '25vh',
-        overflow: 'hidden', // Disable native scroll, we use CSS transforms
-        position: 'relative',
-        maskImage: 'linear-gradient(to bottom, transparent 0%, black 20%, black 85%, transparent 100%)',
-        WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 20%, black 85%, transparent 100%)',
-        padding: '2rem 1rem'
-      }}
-      className="lyrics-container"
-    >
+    <>
+      <style>{`
+        .lyric-box {
+          height: 100%;
+          max-height: 40vh;
+        }
+        @media (orientation: landscape) {
+          .lyric-box {
+            max-height: 75vh;
+          }
+        }
+
+        .lyric-line {
+          margin: 1.5rem 0;
+          transition: all 0.3s ease;
+          font-size: 1.25rem;
+          text-align: center;
+          font-weight: 500;
+        }
+        .lyric-line-active {
+          font-size: 2.2rem;
+          transform: scale(1.05);
+          text-shadow: 0 0 20px rgba(139, 92, 246, 0.4);
+        }
+        
+        /* Landscape on phones (height is small) */
+        @media (orientation: landscape) and (max-height: 500px) {
+           .lyric-line {
+             font-size: 1rem !important;
+             margin: 1rem 0 !important;
+           }
+           .lyric-line-active {
+             font-size: 1.5rem !important;
+           }
+        }
+        
+        /* Landscape on tablets/small laptops */
+        @media (orientation: landscape) and (max-width: 1024px) and (min-height: 501px) {
+           .lyric-line {
+             font-size: 1.1rem !important;
+           }
+           .lyric-line-active {
+             font-size: 1.75rem !important;
+           }
+        }
+      `}</style>
+      <div 
+        ref={containerRef}
+        className="lyrics-container lyric-box"
+        style={{
+          boxSizing: 'border-box',
+          overflow: 'hidden', // Disable native scroll, we use CSS transforms
+          position: 'relative',
+          maskImage: 'linear-gradient(to bottom, transparent 0%, black 15%, black 70%, transparent 100%)',
+          WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 15%, black 70%, transparent 100%)',
+          padding: 'clamp(1rem, 5vh, 3rem) 1rem'
+        }}
+      >
       <div style={{
         transform: `translateY(${offsetY}px)`,
         transition: 'transform 0.5s cubic-bezier(0.25, 1, 0.5, 1)',
@@ -66,22 +113,12 @@ export default function LyricsDisplay({ lyrics, currentTime }) {
         // In case we still need nextTime for interpolation logic
         const nextTime = index < lyrics.length - 1 ? lyrics[index + 1].time : Infinity;
 
-        let styleClass = 'body-text';
-        let customStyle = { 
-          margin: '1.5rem 0', 
-          transition: 'all 0.3s ease',
-          fontSize: '1.25rem',
-          textAlign: 'center',
-          fontWeight: '500'
-        };
+        let styleClass = 'body-text lyric-line';
+        let customStyle = {};
 
         if (isActive) {
-          styleClass = 'heading-2 animate-pulse-glow'; // Removed text-gradient to allow custom word colors
-          customStyle = {
-            ...customStyle,
-            fontSize: '2rem',
-            transform: 'scale(1.05)',
-          };
+          styleClass = 'heading-2 lyric-line lyric-line-active'; 
+          customStyle = {};
           
           let trueStartTime = line.time;
           let trueEndTime = nextTime !== Infinity ? nextTime : line.time + 5;
@@ -105,12 +142,8 @@ export default function LyricsDisplay({ lyrics, currentTime }) {
             <div 
               key={index} 
               ref={isActive ? activeLineRef : null}
-              className={styleClass.replace('animate-pulse-glow', '')} // Remove box-shadow glow
-              style={{
-                ...customStyle, 
-                textAlign: 'center',
-                textShadow: '0 0 20px rgba(139, 92, 246, 0.4)' // Add text glow instead of box glow
-              }}
+              className={styleClass}
+              style={customStyle}
             >
               {activeWords.length > 0 ? activeWords.map((wObj, wIdx) => {
                 let wordProgress = 0;
@@ -174,6 +207,7 @@ export default function LyricsDisplay({ lyrics, currentTime }) {
         );
       })}
       </div>
-    </div>
+      </div>
+    </>
   );
 }

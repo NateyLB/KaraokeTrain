@@ -38,6 +38,7 @@ export default function RoomPage({ params }) {
   const [currentSongTime, setCurrentSongTime] = useState(0);
   const [stems, setStems] = useState(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isQueueOpen, setIsQueueOpen] = useState(false);
   const audioCtxRef = useRef(null);
   const audioRefs = useRef({ vocals: null, no_vocals: null });
   const setupJobIdRef = useRef(null);
@@ -58,7 +59,15 @@ export default function RoomPage({ params }) {
   const [echoOn, setEchoOn] = useState(false);
   const [autoTuneOn, setAutoTuneOn] = useState(false);
 
-  const [micPos, setMicPos] = useState({ x: 16, y: 80 });
+  const [micPos, setMicPos] = useState({ x: 16, y: 16 }); // Fallback
+  useEffect(() => {
+      // Calculate top-right position perfectly next to the Search/Queue toggle cluster
+      if (typeof window !== 'undefined') {
+          // Right padding (16) + Search (48) + Gap (8) + Queue (48) + Gap (8) + Mic Width (48) = 176
+          setMicPos({ x: window.innerWidth - 176, y: 16 });
+      }
+  }, []);
+  const [isMicExpanded, setIsMicExpanded] = useState(false);
   const isDraggingMic = useRef(false);
   const dragStartPos = useRef({ x: 0, y: 0 });
 
@@ -532,20 +541,39 @@ export default function RoomPage({ params }) {
   const renderGlobalOverlays = (showSearchWidget = true) => (
     <>
       {showSearchWidget && !isSearchOpen && (
-          <button 
-            onClick={() => setIsSearchOpen(true)}
-            style={{ position: 'fixed', top: '1rem', right: '1rem', zIndex: 50, background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', borderRadius: '50%', width: '3rem', height: '3rem', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', cursor: 'pointer', boxShadow: '0 0.25rem 0.75rem rgba(0,0,0,0.3)' }}
-          >
-            <Search size={24} />
-          </button>
+          <div style={{ position: 'fixed', top: '1rem', right: '1rem', zIndex: 50, display: 'flex', gap: '0.5rem' }}>
+            <button 
+              onClick={() => setIsSearchOpen(true)}
+              title="Search Songs"
+              style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', borderRadius: '50%', width: '3rem', height: '3rem', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', cursor: 'pointer', boxShadow: '0 0.25rem 0.75rem rgba(0,0,0,0.3)' }}
+            >
+              <Search size={20} />
+            </button>
+            <button 
+              onClick={() => setIsQueueOpen(!isQueueOpen)}
+              title="Toggle Queue"
+              style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', borderRadius: '50%', width: '3rem', height: '3rem', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--secondary-accent)', cursor: 'pointer', boxShadow: '0 0.25rem 0.75rem rgba(0,0,0,0.3)', position: 'relative' }}
+            >
+              <Music size={20} />
+              {partyState?.queue?.length > 0 && (
+                <div style={{ position: 'absolute', top: '-4px', right: '-4px', background: 'var(--primary-accent)', color: 'white', fontSize: '0.7rem', fontWeight: 'bold', width: '20px', height: '20px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {partyState.queue.length}
+                </div>
+              )}
+            </button>
+          </div>
       )}
 
-      {/* Full-width Sticky Bottom Queue Drawer */}
-      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'rgba(10, 10, 15, 0.95)', backdropFilter: 'blur(20px)', borderTop: '1px solid var(--glass-border)', padding: '1.5rem 2rem', borderTopLeftRadius: '1.25rem', borderTopRightRadius: '1.25rem', maxHeight: '35vh', overflowY: 'auto', zIndex: 40, boxShadow: '0 -0.5rem 2rem rgba(0,0,0,0.4)' }}>
-        <h3 className="heading-2" style={{ fontSize: '1.1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Music size={18} color="var(--secondary-accent)" /> 
-            Up Next {partyState?.queue?.length > 0 ? `(${partyState.queue.length})` : ''}
-        </h3>
+      {/* Toggleable Bottom Queue Drawer */}
+      {isQueueOpen && (
+        <div className="animate-fade-in" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'rgba(10, 10, 15, 0.95)', backdropFilter: 'blur(20px)', borderTop: '1px solid var(--glass-border)', padding: '1.5rem 2rem', borderTopLeftRadius: '1.25rem', borderTopRightRadius: '1.25rem', maxHeight: '50vh', overflowY: 'auto', zIndex: 60, boxShadow: '0 -0.5rem 2rem rgba(0,0,0,0.4)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+            <h3 className="heading-2" style={{ fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
+                <Music size={18} color="var(--secondary-accent)" /> 
+                Up Next {partyState?.queue?.length > 0 ? `(${partyState.queue.length})` : ''}
+            </h3>
+            <button onClick={() => setIsQueueOpen(false)} style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', borderRadius: '50%', color: 'white', cursor: 'pointer', padding: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={16} /></button>
+          </div>
         {(!partyState?.queue || partyState.queue.length === 0) ? (
             <p className="body-text" style={{ opacity: 0.5, fontSize: '0.9rem' }}>Queue is empty.</p>
         ) : (
@@ -595,6 +623,7 @@ export default function RoomPage({ params }) {
             </div>
         )}
       </div>
+    )}
     </>
   );
 
@@ -656,8 +685,102 @@ export default function RoomPage({ params }) {
   }
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100vh', paddingTop: '1rem', position: 'relative', paddingBottom: partyState?.queue?.length > 0 ? '35vh' : '1rem' }}>
-      
+    <div className="karaoke-layout" style={{ display: 'flex', flexDirection: 'column', height: '100dvh', width: '100vw', paddingTop: '1rem', position: 'fixed', top: 0, left: 0, paddingBottom: '1rem', boxSizing: 'border-box', overflow: 'hidden' }}>
+      <style>{`
+        .main-content-area {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-height: 0;
+            width: 100%;
+        }
+        .controls-area {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .video-container {
+            width: 100%;
+            max-width: 900px;
+            margin: 0 auto 1rem auto;
+            padding: 0 2rem;
+        }
+        .lyrics-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            position: relative;
+            width: 100%;
+        }
+
+        @media (orientation: landscape) and (min-width: 600px) {
+            .karaoke-layout {
+                padding-bottom: 6rem !important; /* space for bottom controls */
+            }
+            .main-content-area {
+                flex-direction: row;
+                padding: 0 2rem;
+                gap: 2rem;
+                align-items: stretch;
+            }
+            .video-container {
+                flex: 1;
+                max-width: none;
+                margin: 0;
+                padding: 0;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+            }
+            .lyrics-container {
+                flex: 1;
+                margin-top: 0 !important;
+            }
+            .controls-area {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                background: rgba(10, 10, 15, 0.95);
+                backdrop-filter: blur(20px);
+                border-top: 1px solid var(--glass-border);
+                padding: 1rem 2rem;
+                z-index: 40;
+                flex-direction: row;
+                justify-content: space-between;
+                align-items: center;
+                gap: 1.5rem;
+                margin-bottom: 0;
+            }
+            .controls-area button {
+                padding: 0.5rem 1rem !important;
+                font-size: 0.9rem !important;
+            }
+            .control-buttons-row {
+                flex-wrap: nowrap !important;
+                gap: 0.5rem !important;
+                margin-bottom: 0 !important;
+            }
+            .seekbar-row {
+                flex: 1;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+        }
+        .responsive-youtube-iframe {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            border-radius: 0.5rem;
+        }
+      `}</style>
+
       {renderGlobalOverlays(true)}
 
       {/* Top 25% Search Area (Toggleable) */}
@@ -699,104 +822,81 @@ export default function RoomPage({ params }) {
         ))}
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
-         <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem' }}>
-             <button onClick={togglePlay} className="btn-primary" style={{ padding: '0.75rem', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '3.2rem', height: '3.2rem' }} title={isPlaying ? 'Pause' : 'Play'}>
-                {isPlaying ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" style={{ marginLeft: '0.2rem' }} />}
-             </button>
-             <button onClick={() => setVocalsEnabled(!vocalsEnabled)} className="btn-secondary" style={{ padding: '0.75rem 1.5rem', borderRadius: '99px', fontSize: '1.1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: vocalsEnabled ? 1 : 0.7 }}>
-                {vocalsEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
-                {vocalsEnabled ? 'Vocals On' : 'Vocals Off'}
-             </button>
-             <button onClick={() => setIsVideoVisible(!isVideoVisible)} className="btn-secondary" style={{ padding: '0.75rem 1.5rem', borderRadius: '99px', fontSize: '1.1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: isVideoVisible ? 1 : 0.7 }}>
-                <Video size={20} />
-                {isVideoVisible ? 'Hide Video' : 'Show Video'}
-             </button>
-         </div>
-         
-         <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem' }}>
-             <button onClick={() => {
-                 if (parsedLyrics.length > 0) {
-                     const firstValidLine = parsedLyrics.find(l => l.text.trim().length > 0) || parsedLyrics[0];
-                     setLyricsOffset((currentSongTime - firstValidLine.time).toFixed(2));
-                 }
-             }} className="btn-secondary" style={{ padding: '0.75rem 1.5rem', borderRadius: '99px', fontSize: '1.1rem', fontWeight: 600 }} title="Click right when singing starts to align lyrics">
-                Align Start
-             </button>
-             {(() => {
-                 const firstValidTime = (parsedLyrics.find(l => l.text.trim().length > 0) || parsedLyrics[0])?.time || 0;
-                 const displayTime = ((Number(lyricsOffset) || 0) + firstValidTime).toFixed(2);
-                 
-                 return (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--glass-bg)', padding: '0 1rem', borderRadius: '99px', border: '1px solid var(--glass-border)' }}>
-                      <button onClick={() => setLyricsOffset(o => Math.round(((Number(o) || 0) - 0.5) * 100) / 100)} style={{ color: 'white', padding: '0.5rem', fontWeight: 'bold', background: 'transparent', border: 'none', cursor: 'pointer' }}>-</button>
-                      <div style={{ display: 'flex', alignItems: 'center' }}>
-                          <span style={{ fontSize: '0.9rem', opacity: 0.8 }}>Start: </span>
-                         <input 
-                             type="number" 
-                             step="0.1" 
-                             value={displayTime} 
-                             onChange={(e) => {
-                                 const newStart = parseFloat(e.target.value);
-                                 if (!isNaN(newStart)) {
-                                     setLyricsOffset(newStart - firstValidTime);
-                                 }
-                             }}
-                             onBlur={(e) => {
-                                 if (e.target.value === "" || e.target.value === "-") {
-                                     setLyricsOffset(0);
-                                 }
-                             }}
-                             style={{ 
-                                 width: '3.5rem', 
-                                 background: 'transparent', 
-                                 border: 'none', 
-                                 color: 'white', 
-                                 fontSize: '0.9rem', 
-                                 textAlign: 'center',
-                                 outline: 'none',
-                                 fontFamily: 'inherit'
-                             }} 
-                         />
-                         <span style={{ fontSize: '0.9rem', opacity: 0.8 }}>s</span>
+      <div className="controls-area">
+          <div className="control-buttons-row" style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem', justifyContent: 'center', alignItems: 'center' }}>
+              <button onClick={togglePlay} className="btn-primary" style={{ padding: '0.75rem', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '3.2rem', height: '3.2rem' }} title={isPlaying ? 'Pause' : 'Play'}>
+                  {isPlaying ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" style={{ marginLeft: '0.2rem' }} />}
+              </button>
+              <button onClick={() => setVocalsEnabled(!vocalsEnabled)} className="btn-secondary" style={{ padding: '0.75rem 1.5rem', borderRadius: '99px', fontSize: '1.1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: vocalsEnabled ? 1 : 0.7 }}>
+                  {vocalsEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
+                  {vocalsEnabled ? 'Vocals On' : 'Vocals Off'}
+              </button>
+              <button onClick={() => setIsVideoVisible(!isVideoVisible)} className="btn-secondary" style={{ padding: '0.75rem 1.5rem', borderRadius: '99px', fontSize: '1.1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: isVideoVisible ? 1 : 0.7 }}>
+                  <Video size={20} />
+                  {isVideoVisible ? 'Hide Video' : 'Show Video'}
+              </button>
+              
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button onClick={() => {
+                      if (parsedLyrics.length > 0) {
+                          const firstValidLine = parsedLyrics.find(l => l.text.trim().length > 0) || parsedLyrics[0];
+                          setLyricsOffset((currentSongTime - firstValidLine.time).toFixed(2));
+                      }
+                  }} className="btn-secondary" style={{ padding: '0.75rem 1.5rem', borderRadius: '99px', fontSize: '1.1rem', fontWeight: 600 }} title="Click right when singing starts to align lyrics">
+                      Align Start
+                  </button>
+                  
+                  {(() => {
+                      const firstValidTime = (parsedLyrics.find(l => l.text.trim().length > 0) || parsedLyrics[0])?.time || 0;
+                      const displayTime = ((Number(lyricsOffset) || 0) + firstValidTime).toFixed(2);
+                      
+                      return (
+                      <div className="align-start-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--glass-bg)', padding: '0 1rem', borderRadius: '99px', border: '1px solid var(--glass-border)' }}>
+                          <button onClick={() => setLyricsOffset(o => Math.round(((Number(o) || 0) - 0.5) * 100) / 100)} style={{ color: 'white', padding: '0.5rem', fontWeight: 'bold', background: 'transparent', border: 'none', cursor: 'pointer' }}>-</button>
+                          <div style={{ display: 'flex', alignItems: 'center' }}>
+                              <span style={{ fontSize: '0.9rem', opacity: 0.8, display: 'none' }}>Start: </span>
+                              <input 
+                                  type="number" 
+                                  step="0.1" 
+                                  value={displayTime} 
+                                  onChange={(e) => {
+                                      const newStart = parseFloat(e.target.value);
+                                      if (!isNaN(newStart)) setLyricsOffset(newStart - firstValidTime);
+                                  }}
+                                  onBlur={(e) => { if (e.target.value === "" || e.target.value === "-") setLyricsOffset(0); }}
+                                  style={{ width: '3rem', background: 'transparent', border: 'none', color: 'white', fontSize: '0.9rem', textAlign: 'center', outline: 'none' }} 
+                              />
+                              <span style={{ fontSize: '0.9rem', opacity: 0.8 }}>s</span>
+                          </div>
+                          <button onClick={() => setLyricsOffset(o => Math.round(((Number(o) || 0) + 0.5) * 100) / 100)} style={{ color: 'white', padding: '0.5rem', fontWeight: 'bold', background: 'transparent', border: 'none', cursor: 'pointer' }}>+</button>
+                          {lyricsOffset !== 0 && (
+                              <button onClick={() => setLyricsOffset(0)} style={{ color: 'var(--secondary-accent)', padding: '0.5rem', fontSize: '0.8rem', fontWeight: 'bold', background: 'transparent', border: 'none', cursor: 'pointer' }}>Reset</button>
+                          )}
                       </div>
-                      <button onClick={() => setLyricsOffset(o => Math.round(((Number(o) || 0) + 0.5) * 100) / 100)} style={{ color: 'white', padding: '0.5rem', fontWeight: 'bold', background: 'transparent', border: 'none', cursor: 'pointer' }}>+</button>
-                      {lyricsOffset !== 0 && (
-                          <button onClick={() => setLyricsOffset(0)} style={{ color: 'var(--secondary-accent)', padding: '0.5rem', marginLeft: '0.25rem', fontSize: '0.8rem', fontWeight: 'bold', background: 'transparent', border: 'none', cursor: 'pointer' }}>Reset</button>
-                      )}
-                  </div>
-                 );
-             })()}
-             <button onClick={handleNextSong} className="btn-secondary" style={{ padding: '0.75rem 1.5rem', borderRadius: '99px', fontSize: '1.1rem', fontWeight: 600 }}>
-                Next Song
-             </button>
-         </div>
+                      );
+                  })()}
+              </div>
+
+              <button onClick={handleNextSong} className="btn-secondary" style={{ padding: '0.75rem 1.5rem', borderRadius: '99px', fontSize: '1.1rem', fontWeight: 600 }}>
+                  Next Song
+              </button>
+          </div>
+
+          <div className="seekbar-row" style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0 2rem', width: '100%', maxWidth: '900px', margin: '0 auto' }}>
+            <span className="body-text" style={{ fontSize: '0.9rem', minWidth: '2.5rem', textAlign: 'right' }}>{formatTime(currentSongTime)}</span>
+            <input type="range" min={0} max={duration || 100} value={currentSongTime} onChange={(e) => {
+                const newTime = parseFloat(e.target.value);
+                setCurrentSongTime(newTime);
+                Object.values(audioRefs.current).forEach(audio => { if (audio) audio.currentTime = newTime; });
+                if (ytPlayerRef.current) ytPlayerRef.current.seekTo(newTime, true);
+            }} style={{ flex: 1, accentColor: 'var(--primary-accent)', cursor: 'pointer' }} />
+            <span className="body-text" style={{ fontSize: '0.9rem', minWidth: '2.5rem' }}>{formatTime(duration)}</span>
+          </div>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0 2rem', width: '100%', maxWidth: '900px', margin: '0 auto 1rem auto' }}>
-        <span className="body-text" style={{ fontSize: '0.9rem', minWidth: '2.5rem', textAlign: 'right' }}>{formatTime(currentSongTime)}</span>
-        <input type="range" min={0} max={duration || 100} value={currentSongTime} onChange={(e) => {
-            const newTime = parseFloat(e.target.value);
-            setCurrentSongTime(newTime);
-            Object.values(audioRefs.current).forEach(audio => { if (audio) audio.currentTime = newTime; });
-            if (ytPlayerRef.current) ytPlayerRef.current.seekTo(newTime, true);
-        }} style={{ flex: 1, accentColor: 'var(--primary-accent)', cursor: 'pointer' }} />
-        <span className="body-text" style={{ fontSize: '0.9rem', minWidth: '2.5rem' }}>{formatTime(duration)}</span>
-      </div>
-
-      {/* Always render YouTube component to keep it synced, but hide it visually if toggled off */}
-      <style>{`
-        .responsive-youtube-iframe {
-            position: absolute !important;
-            top: 0 !important;
-            left: 0 !important;
-            width: 100% !important;
-            height: 100% !important;
-            border-radius: 0.5rem;
-        }
-      `}</style>
-      {song && song.jobId && (
-        <div style={{ display: isVideoVisible ? 'block' : 'none', width: '100%', maxWidth: '900px', margin: '0 auto 1rem auto', padding: '0 2rem' }}>
+      <div className="main-content-area">
+        {song && song.jobId && (
+          <div className="video-container" style={{ display: isVideoVisible ? 'flex' : 'none' }}>
           <div style={{ position: 'relative', width: '100%', paddingBottom: '56.25%', height: 0, overflow: 'hidden' }}>
             <YouTube 
               videoId={song.jobId} 
@@ -853,13 +953,14 @@ export default function RoomPage({ params }) {
             }}
           />
           </div>
-        </div>
-      )}
-
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative', marginTop: isVideoVisible ? '0' : '2rem', width: '100%' }}>
-        {parsedLyrics.length > 0 && (
-          <LyricsDisplay lyrics={parsedLyrics} currentTime={Math.max(0, currentSongTime - (Number(lyricsOffset) || 0))} />
+          </div>
         )}
+
+        <div className="lyrics-container" style={{ marginTop: isVideoVisible ? '0' : '2rem' }}>
+          {parsedLyrics.length > 0 && (
+            <LyricsDisplay lyrics={parsedLyrics} currentTime={Math.max(0, currentSongTime - (Number(lyricsOffset) || 0))} />
+          )}
+        </div>
       </div>
 
       {/* Floating Microphone Card */}
@@ -867,53 +968,79 @@ export default function RoomPage({ params }) {
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
+        onClick={() => {
+            // Only toggle expansion if we didn't just drag it
+            if (!isDraggingMic.current) {
+                setIsMicExpanded(!isMicExpanded);
+            }
+        }}
         style={{
           position: 'fixed',
           top: micPos.y,
           left: micPos.x,
-          background: 'rgba(20, 20, 25, 0.95)',
+          background: isMicExpanded ? 'rgba(20, 20, 25, 0.95)' : (isListening ? 'rgba(236, 72, 153, 0.9)' : 'rgba(20, 20, 25, 0.8)'),
           backdropFilter: 'blur(20px)',
-          border: '1px solid var(--glass-border)',
-          borderRadius: '1rem',
-          padding: '0.8rem',
+          border: `1px solid ${isListening ? 'var(--secondary-accent)' : 'var(--glass-border)'}`,
+          borderRadius: isMicExpanded ? '1rem' : '50%',
+          padding: isMicExpanded ? '0.8rem' : '0.6rem',
           display: 'flex',
           flexDirection: 'column',
-          gap: '0.6rem',
+          gap: isMicExpanded ? '0.6rem' : '0',
           boxShadow: '0 1rem 2rem rgba(0,0,0,0.5)',
           zIndex: 50,
-          minWidth: '220px',
+          minWidth: isMicExpanded ? '220px' : 'auto',
           width: 'max-content',
           cursor: isDraggingMic.current ? 'grabbing' : 'grab',
-          touchAction: 'none'
+          touchAction: 'none',
+          transform: isMicExpanded ? 'translateX(calc(-100% + 47px))' : 'none',
+          transition: isDraggingMic.current ? 'none' : 'background 0.2s ease, border-radius 0.2s ease, transform 0.2s cubic-bezier(0.25, 1, 0.5, 1)'
       }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-             <h4 style={{ fontSize: '1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Mic size={18} color="var(--primary-accent)" /> Microphone
-             </h4>
-             <button
-               onClick={() => {
-                   isListening ? stopListening() : startListening();
-               }}
-               title="Toggle Microphone"
-               style={{
-                 width: '40px',
-                 height: '40px',
-                 borderRadius: '50%',
-                 background: isListening ? 'rgba(236, 72, 153, 0.2)' : 'rgba(255,255,255,0.05)',
-                 border: `1px solid ${isListening ? 'var(--secondary-accent)' : 'var(--glass-border)'}`,
-                 display: 'flex',
-                 alignItems: 'center',
-                 justifyContent: 'center',
-                 cursor: 'pointer',
-                 transition: 'all 0.2s ease',
-               }}
-             >
-               {isListening
-                 ? <Mic size={20} color="var(--secondary-accent)" />
-                 : <MicOff size={20} color="var(--text-muted)" />
-               }
-             </button>
-          </div>
+          {!isMicExpanded ? (
+              // COLLAPSED VIEW: Just a floating circle
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '28px', height: '28px' }}>
+                  {isListening ? <Mic size={20} color="white" /> : <MicOff size={20} color="var(--text-muted)" />}
+              </div>
+          ) : (
+              // EXPANDED VIEW: Full Mixing Console
+              <>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                         <button
+                           onClick={(e) => {
+                               e.stopPropagation();
+                               isListening ? stopListening() : startListening();
+                           }}
+                           title="Toggle Microphone"
+                           style={{
+                             background: isListening ? 'rgba(236, 72, 153, 0.2)' : 'rgba(255,255,255,0.05)',
+                             border: `1px solid ${isListening ? 'var(--secondary-accent)' : 'var(--glass-border)'}`,
+                             borderRadius: '1rem',
+                             padding: '0.25rem 0.6rem',
+                             display: 'flex',
+                             alignItems: 'center',
+                             gap: '0.4rem',
+                             cursor: 'pointer',
+                             transition: 'all 0.2s ease',
+                           }}
+                         >
+                           {isListening ? <Mic size={14} color="var(--secondary-accent)" /> : <MicOff size={14} color="var(--text-muted)" />}
+                           <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: isListening ? 'var(--secondary-accent)' : 'var(--text-muted)' }}>{isListening ? 'ON' : 'OFF'}</span>
+                         </button>
+                         <h4 style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-main)', fontWeight: 600 }}>
+                            Settings
+                         </h4>
+                     </div>
+                     <button
+                       onClick={(e) => {
+                           e.stopPropagation(); 
+                           setIsMicExpanded(false);
+                       }}
+                       title="Close Panel"
+                       style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', borderRadius: '50%', color: 'var(--text-muted)', cursor: 'pointer', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.2s ease' }}
+                     >
+                       <X size={16} />
+                     </button>
+                  </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -982,6 +1109,8 @@ export default function RoomPage({ params }) {
               <AlertCircle size={14} /> {micError}
             </p>
           )}
+          </>
+        )}
       </div>
 
     </div>

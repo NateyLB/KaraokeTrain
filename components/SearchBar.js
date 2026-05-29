@@ -29,7 +29,7 @@ export default function SearchBar({ onSelect }) {
   };
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1rem', minHeight: 0 }}>
       <form onSubmit={handleSearch} style={{ position: 'relative' }}>
         <div style={{ position: 'relative' }}>
           <Search
