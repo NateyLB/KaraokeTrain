@@ -354,8 +354,8 @@ export default function RoomPage({ params }) {
         setLyricsOffset(0); // Reset offset on new song
       } catch (err) {
         console.error('Room setup error:', err);
-        setLoadingStatus('Error: ' + err.message);
-        setIsLoading(false);
+        setLoadingStatus('Error: ' + err.message + ' (Please play the next song in queue)');
+        // Do NOT set isLoading(false) here, otherwise it silently dumps the user into a broken room with no audio!
       }
   }
 
@@ -586,12 +586,12 @@ export default function RoomPage({ params }) {
     </>
   );
 
-  // Stop microphone if queue finishes and there is no active song
+  // Stop microphone if queue finishes or while loading the next song
   useEffect(() => {
-    if (partyState && !partyState.currentSong && isListening) {
+    if (isListening && ((partyState && !partyState.currentSong) || isLoading)) {
       stopListening();
     }
-  }, [partyState, isListening, stopListening]);
+  }, [partyState, isLoading, isListening, stopListening]);
 
   if (!partyState || (!partyState.currentSong && !isLoading)) {
       return (
@@ -629,8 +629,12 @@ export default function RoomPage({ params }) {
             </div>
 
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
-                <Loader2 size={64} style={{ animation: 'spin 1.2s linear infinite', color: 'var(--primary-accent)', marginBottom: '1.5rem' }} />
-                <h2 className="heading-2 text-gradient" style={{ marginBottom: '0.5rem' }}>Loading Next Song...</h2>
+                {loadingStatus.startsWith('Error:') ? (
+                  <AlertCircle size={64} style={{ color: '#ef4444', marginBottom: '1.5rem' }} />
+                ) : (
+                  <Loader2 size={64} style={{ animation: 'spin 1.2s linear infinite', color: 'var(--primary-accent)', marginBottom: '1.5rem' }} />
+                )}
+                <h2 className="heading-2 text-gradient" style={{ marginBottom: '0.5rem' }}>{loadingStatus.startsWith('Error:') ? 'Processing Failed' : 'Loading Next Song...'}</h2>
                 <p className="body-text" style={{ fontSize: '1.1rem', opacity: 0.8 }}>{loadingStatus}</p>
                 {/* spin keyframe is defined in globals.css */}
             </div>
@@ -711,11 +715,11 @@ export default function RoomPage({ params }) {
                  const firstValidTime = (parsedLyrics.find(l => l.text.trim().length > 0) || parsedLyrics[0])?.time || 0;
                  const displayTime = ((Number(lyricsOffset) || 0) + firstValidTime).toFixed(2);
                  
-                 return lyricsOffset !== 0 && (
+                 return (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--glass-bg)', padding: '0 1rem', borderRadius: '99px', border: '1px solid var(--glass-border)' }}>
                       <button onClick={() => setLyricsOffset(o => Math.round(((Number(o) || 0) - 0.5) * 100) / 100)} style={{ color: 'white', padding: '0.5rem', fontWeight: 'bold', background: 'transparent', border: 'none', cursor: 'pointer' }}>-</button>
                       <div style={{ display: 'flex', alignItems: 'center' }}>
-                          <span style={{ fontSize: '0.9rem', opacity: 0.8 }}>Start Time: </span>
+                          <span style={{ fontSize: '0.9rem', opacity: 0.8 }}>Start: </span>
                          <input 
                              type="number" 
                              step="0.1" 
@@ -745,7 +749,9 @@ export default function RoomPage({ params }) {
                          <span style={{ fontSize: '0.9rem', opacity: 0.8 }}>s</span>
                       </div>
                       <button onClick={() => setLyricsOffset(o => Math.round(((Number(o) || 0) + 0.5) * 100) / 100)} style={{ color: 'white', padding: '0.5rem', fontWeight: 'bold', background: 'transparent', border: 'none', cursor: 'pointer' }}>+</button>
-                      <button onClick={() => setLyricsOffset(0)} style={{ color: 'var(--secondary-accent)', padding: '0.5rem', marginLeft: '0.25rem', fontSize: '0.8rem', fontWeight: 'bold', background: 'transparent', border: 'none', cursor: 'pointer' }}>Reset</button>
+                      {lyricsOffset !== 0 && (
+                          <button onClick={() => setLyricsOffset(0)} style={{ color: 'var(--secondary-accent)', padding: '0.5rem', marginLeft: '0.25rem', fontSize: '0.8rem', fontWeight: 'bold', background: 'transparent', border: 'none', cursor: 'pointer' }}>Reset</button>
+                      )}
                   </div>
                  );
              })()}
@@ -778,7 +784,7 @@ export default function RoomPage({ params }) {
         }
       `}</style>
       {song && song.jobId && (
-        <div style={{ display: isVideoVisible ? 'block' : 'none', width: '100%', maxWidth: '900px', margin: '0 auto 1rem auto', pointerEvents: 'none', padding: '0 2rem' }}>
+        <div style={{ display: isVideoVisible ? 'block' : 'none', width: '100%', maxWidth: '900px', margin: '0 auto 1rem auto', padding: '0 2rem' }}>
           <div style={{ position: 'relative', width: '100%', paddingBottom: '56.25%', height: 0, overflow: 'hidden' }}>
             <YouTube 
               videoId={song.jobId} 
@@ -795,7 +801,7 @@ export default function RoomPage({ params }) {
                   }
               }}
               iframeClassName="responsive-youtube-iframe"
-              style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
+              style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', borderRadius: '1rem', overflow: 'hidden', border: '1px solid var(--glass-border)', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}
             onReady={(event) => {
                 ytPlayerRef.current = event.target;
                 event.target.mute(); // Mute YouTube so it doesn't clash with Karaoke audio stems
@@ -805,7 +811,8 @@ export default function RoomPage({ params }) {
             }}
             onStateChange={(event) => {
                 // 1 = PLAYING, 2 = PAUSED, 3 = BUFFERING
-                if (event.data === 1 && isPlayingRef.current) {
+                if (event.data === 1) {
+                    setIsPlaying(true);
                     // YouTube finished buffering and started playing. Start local audio!
                     const allStems = ['vocals', 'no_vocals'];
                     allStems.forEach(stemKey => {
@@ -813,8 +820,17 @@ export default function RoomPage({ params }) {
                             audioRefs.current[stemKey].play().catch(e => console.error("Play prevented", e));
                         }
                     });
-                } else if (event.data === 3 || event.data === 2) {
-                    // YouTube is buffering or paused. Pause local audio to keep it in sync.
+                } else if (event.data === 2) {
+                    setIsPlaying(false);
+                    // YouTube is paused. Pause local audio to keep it in sync.
+                    const allStems = ['vocals', 'no_vocals'];
+                    allStems.forEach(stemKey => {
+                        if (audioRefs.current[stemKey] && !audioRefs.current[stemKey].paused) {
+                            audioRefs.current[stemKey].pause();
+                        }
+                    });
+                } else if (event.data === 3) {
+                    // YouTube is buffering. Pause local audio to keep it in sync.
                     const allStems = ['vocals', 'no_vocals'];
                     allStems.forEach(stemKey => {
                         if (audioRefs.current[stemKey] && !audioRefs.current[stemKey].paused) {
@@ -823,7 +839,6 @@ export default function RoomPage({ params }) {
                     });
                 }
             }}
-            style={{ borderRadius: '1rem', overflow: 'hidden', border: '1px solid var(--glass-border)', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}
           />
           </div>
         </div>

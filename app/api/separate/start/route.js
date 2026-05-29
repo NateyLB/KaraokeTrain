@@ -49,12 +49,15 @@ export async function GET(request) {
     // Initialize job status
     jobQueue.set(videoId, { status: 'processing', progress: 0, message: 'Starting job...' });
 
+    // Extract baseUrl to ensure internal fetches route properly in Cloud Run
+    const baseUrl = process.env.INTERNAL_BASE_URL || new URL(request.url).origin;
+
     // Start background process (fire and forget)
-    runBackgroundSeparation({ videoId, title, artist }, videoId, uploadDir).catch(err => {
+    runBackgroundSeparation({ videoId, title, artist }, videoId, uploadDir, baseUrl).catch(err => {
       console.error("Background separation error:", err);
       const existing = jobQueue.get(videoId);
       if (existing?.status !== 'error') {
-        jobQueue.update(videoId, { status: 'error', error: 'Processing failed. Please try again.' });
+        jobQueue.update(videoId, { status: 'error', error: `Processing failed: ${err.message}` });
       }
     });
 
@@ -68,13 +71,27 @@ export async function GET(request) {
 }
 
 export async function runBackgroundSeparation(song, jobId, uploadDir, baseUrl = 'http://127.0.0.1:3000') {
-  const inputPath = path.join(uploadDir, 'input.m4a');
-
   // SECURITY: Validate videoId strictly before using in any command
   if (!song.videoId || !isValidVideoId(song.videoId)) {
     throw new Error('Invalid videoId format');
   }
 
+  // Check GCS Cache First!
+  const cachedData = await checkCache(song.videoId);
+  if (cachedData) {
+    console.log(`Cache hit for ${song.videoId}! Skipping separation.`);
+    jobQueue.update(jobId, { 
+      status: 'ready', 
+      progress: 100, 
+      message: 'Ready to sing!', 
+      lyrics: cachedData.lyrics, 
+      lyricsSource: cachedData.source, 
+      fetchedLyricsData: null 
+    });
+    return; // Exit early!
+  }
+
+  const inputPath = path.join(uploadDir, 'input.m4a');
   const url = `https://www.youtube.com/watch?v=${song.videoId}`;
 
   startJob();
@@ -87,14 +104,29 @@ export async function runBackgroundSeparation(song, jobId, uploadDir, baseUrl = 
         '-o', inputPath,
         '--no-playlist',       // Never download playlists
         '--max-filesize', '50m', // Limit file size to prevent disk exhaustion
+        '--force-overwrites',  // Always overwrite to prevent lingering 0-byte files from breaking it
         url
       ]);
 
       let stderrOutput = '';
+      let stdoutOutput = '';
+      ytdlp.stdout.on('data', (data) => { stdoutOutput += data.toString(); });
       ytdlp.stderr.on('data', (data) => { stderrOutput += data.toString(); });
       ytdlp.on('close', (code) => {
-        if (code === 0) resolve();
-        else reject(new Error(`yt-dlp exited with code ${code}. Error: ${stderrOutput}`));
+        if (code === 0) {
+          try {
+            const stats = fs.statSync(inputPath);
+            if (stats.size === 0) {
+              reject(new Error(`yt-dlp exited with code 0 but created a 0-byte file. stdout: ${stdoutOutput}. stderr: ${stderrOutput}`));
+            } else {
+              resolve();
+            }
+          } catch (e) {
+            reject(new Error(`yt-dlp failed to create file. stdout: ${stdoutOutput}. stderr: ${stderrOutput}`));
+          }
+        } else {
+          reject(new Error(`yt-dlp exited with code ${code}. Error: ${stderrOutput}`));
+        }
       });
       ytdlp.on('error', reject);
     });
@@ -148,7 +180,8 @@ export async function runBackgroundSeparation(song, jobId, uploadDir, baseUrl = 
         if (code === 0) {
           resolve();
         } else {
-          reject(new Error(`Demucs exited with code ${code}. Check the UI for details.`));
+          const lastLines = outputLines.slice(-5).join('\n');
+          reject(new Error(`Demucs exited with code ${code}. Error: ${lastLines}`));
         }
       });
       
@@ -168,21 +201,32 @@ export async function runBackgroundSeparation(song, jobId, uploadDir, baseUrl = 
     // SECURITY: Always use hardcoded localhost to prevent SSRF via Host header manipulation
     jobQueue.update(jobId, { progress: 85, message: 'Verifying lyrics alignment with Whisper AI...' });
     
-    // Fetch lyrics manually using the server endpoint logic
+    // Fetch lyrics manually using the direct internal function
     let plainText = '';
     let fetchedLyricsData = null;
     try {
-       const internalBaseUrl = process.env.INTERNAL_BASE_URL || `http://127.0.0.1:${process.env.PORT || 3000}`;
-       const lyricsRes = await fetch(`${internalBaseUrl}/api/room?track=${encodeURIComponent(song.title)}&artist=${encodeURIComponent(song.artist)}`);
-       if (lyricsRes.ok) {
-           const data = await lyricsRes.json();
-           if (data.lyrics) {
-               fetchedLyricsData = data.lyrics;
-               if (data.lyrics.syncedLyrics) {
-                   plainText = data.lyrics.syncedLyrics.split('\n').map(l => l.replace(/\[.*?\]/, '').trim()).join('\n');
-               } else if (data.lyrics.plainLyrics) {
-                   plainText = data.lyrics.plainLyrics;
-               }
+       // We import fetchLyrics here to avoid circular dependencies at the top level
+       const { fetchLyrics } = await import('../../../../lib/lyrics.js');
+       
+       // Replicate the cleanup logic from the room route
+       let t = song.title.replace(/\([^)]+\)/g, '').replace(/\[[^\]]+\]/g, '');
+       t = t.replace(/-?\s*Live at.*$/i, '').replace(/-?\s*Live(?!.*-).*$/i, '');
+       let a = song.artist.replace(/VEVO$/i, '').replace(/Official$/i, '').replace(/Topic$/i, '').trim();
+       if (t.includes('-')) {
+         const parts = t.split('-');
+         a = parts[0].trim();
+         t = parts[1].trim();
+       }
+       t = t.trim();
+       a = a.trim();
+       
+       fetchedLyricsData = await fetchLyrics(t, a);
+       
+       if (fetchedLyricsData) {
+           if (fetchedLyricsData.syncedLyrics) {
+               plainText = fetchedLyricsData.syncedLyrics.split('\n').map(l => l.replace(/\[.*?\]/, '').trim()).join('\n');
+           } else if (fetchedLyricsData.plainLyrics) {
+               plainText = fetchedLyricsData.plainLyrics;
            }
        }
     } catch(e) {
@@ -240,7 +284,7 @@ export async function runBackgroundSeparation(song, jobId, uploadDir, baseUrl = 
     }, 30 * 60 * 1000);
 
   } catch (err) {
-    jobQueue.update(jobId, { status: 'error', error: 'Processing failed. Please try again.' });
+    jobQueue.update(jobId, { status: 'error', error: `Processing failed: ${err.message}` });
     throw err;
   } finally {
     finishJob();

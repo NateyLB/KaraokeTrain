@@ -101,31 +101,6 @@ export default function LyricsDisplay({ lyrics, currentTime }) {
           
           const duration = trueEndTime - trueStartTime;
           
-          if (activeWords.length === 0) {
-              const wordsText = line.text.split(' ');
-              const maxDuration = trueEndTime - trueStartTime;
-              // Highlight at a natural reading/singing speed (max 0.3s per word)
-              // This prevents the gradient from dragging slowly across gaps.
-              const syntheticDuration = Math.min(maxDuration, wordsText.length * 0.3);
-              
-              const timePerWord = syntheticDuration / Math.max(1, wordsText.length);
-              activeWords = wordsText.map((w, i) => ({
-                  word: w,
-                  start: trueStartTime + (i * timePerWord),
-                  end: trueStartTime + ((i + 1) * timePerWord)
-              }));
-          }
-          let progress = 0;
-          if (currentTime >= trueStartTime) {
-              if (duration > 0) {
-                  progress = (currentTime - trueStartTime) / duration;
-              } else {
-                  progress = 1;
-              }
-          }
-          if (currentTime > trueEndTime) progress = 1;
-          progress = Math.max(0, Math.min(1, progress)) * 100;
-
           return (
             <div 
               key={index} 
@@ -137,7 +112,7 @@ export default function LyricsDisplay({ lyrics, currentTime }) {
                 textShadow: '0 0 20px rgba(139, 92, 246, 0.4)' // Add text glow instead of box glow
               }}
             >
-              {activeWords.map((wObj, wIdx) => {
+              {activeWords.length > 0 ? activeWords.map((wObj, wIdx) => {
                 let wordProgress = 0;
                 if (wObj.start != null && wObj.end != null) {
                   const wDuration = wObj.end - wObj.start;
@@ -173,7 +148,11 @@ export default function LyricsDisplay({ lyrics, currentTime }) {
                     {wObj.word}{needsSpace ? ' ' : ''}
                   </span>
                 );
-              })}
+              }) : (
+                <span style={{ color: 'var(--primary-accent)' }}>
+                  {line.text}
+                </span>
+              )}
             </div>
           );
         } else if (isPast) {

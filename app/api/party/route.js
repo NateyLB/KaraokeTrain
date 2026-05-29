@@ -73,13 +73,21 @@ export async function POST(request) {
         return NextResponse.json({ error: `Queue is full (max ${MAX_QUEUE_SIZE} songs)` }, { status: 429 });
       }
 
-      // Use an internal fetch to reliably trigger the background separation, bypassing the need for the client to do it.
-      // This solves issues with cached old JS clients, or if the client closes the browser too quickly.
-      const baseUrl = process.env.INTERNAL_BASE_URL || 'http://127.0.0.1:3000';
-      fetch(`${baseUrl}/api/separate/start?videoId=${encodeURIComponent(song.videoId)}&title=${encodeURIComponent(song.title)}&artist=${encodeURIComponent(song.artist)}`)
-        .catch(err => console.error("Internal background trigger failed:", err));
-
+      // Run the background separation natively without an HTTP fetch loopback.
+      // Since we use --no-cpu-throttling in Cloud Run, the container stays alive.
+      const baseUrl = process.env.INTERNAL_BASE_URL || new URL(request.url).origin;
       const jobId = song.videoId;
+      const uploadDir = path.join(process.cwd(), 'uploads', jobId);
+      fs.mkdirSync(uploadDir, { recursive: true });
+      jobQueue.set(jobId, { status: 'processing', progress: 0, message: 'Starting job...' });
+      
+      runBackgroundSeparation({ videoId: song.videoId, title: song.title, artist: song.artist }, jobId, uploadDir, baseUrl).catch(err => {
+        console.error("Background separation error:", err);
+        const existing = jobQueue.get(jobId);
+        if (existing?.status !== 'error') {
+          jobQueue.update(jobId, { status: 'error', error: 'Processing failed. Please try again.' });
+        }
+      });
 
       const newSong = {
         ...song,

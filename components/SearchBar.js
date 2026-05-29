@@ -122,8 +122,12 @@ export default function SearchBar({ onSelect }) {
             )}
 
             <div style={{ flex: 1, minWidth: 0 }}>
-              <h3 style={{ fontSize: '0.95rem', fontWeight: 600, lineHeight: 1.3, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{track.title}</h3>
-              <p className="body-text" style={{ fontSize: '0.8rem', marginTop: '0.2rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{track.artist}</p>
+              <h3 style={{ fontSize: '0.95rem', fontWeight: 600, lineHeight: 1.3, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                {track.title ? track.title.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>') : ''}
+              </h3>
+              <p className="body-text" style={{ fontSize: '0.8rem', marginTop: '0.2rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {track.artist ? track.artist.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>') : ''}
+              </p>
             </div>
 
             <ChevronRight size={18} color="var(--text-muted)" style={{ flexShrink: 0 }} />

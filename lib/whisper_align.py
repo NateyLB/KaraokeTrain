@@ -115,13 +115,57 @@ def main():
     
     sm = difflib.SequenceMatcher(None, lrclib_texts, whisper_texts)
     
+    # Calculate global offset to handle live versions vs studio versions
+    global_offset = 0.0
+    if lrclib_line_times:
+        matched_offsets = []
+        for tag, i1, i2, j1, j2 in sm.get_opcodes():
+            if tag == 'equal':
+                for k in range(i2 - i1):
+                    lrclib_idx = i1 + k
+                    whisper_idx = j1 + k
+                    line_idx = word_to_line[lrclib_idx]
+                    
+                    if line_idx < len(lrclib_line_times):
+                        w_data = whisper_words_flat[whisper_idx]
+                        
+                        # Find how many words come before this word in the same line
+                        words_before_in_line = 0
+                        idx = lrclib_idx - 1
+                        while idx >= 0 and word_to_line[idx] == line_idx:
+                            words_before_in_line += 1
+                            idx -= 1
+                            
+                        # Estimate the start time of the line based on this matched word
+                        # Assume roughly 0.33 seconds per preceding word
+                        estimated_line_start = w_data["start"] - (words_before_in_line * 0.33)
+                        diff = estimated_line_start - lrclib_line_times[line_idx]
+                        matched_offsets.append(diff)
+                        
+        if matched_offsets:
+            # Use the median offset from all matched words to filter out Whisper hallucinations
+            matched_offsets.sort()
+            global_offset = matched_offsets[len(matched_offsets) // 2]
+            
+        if abs(global_offset) > 1.0:
+            lrclib_line_times = [max(0.0, t + global_offset) for t in lrclib_line_times]
+    
     if sm.ratio() < 0.15:
-        # Global Mismatch! Fallback to pure Whisper transcription
-        print(json.dumps({
-            "source": "whisper_fallback", 
-            "lyrics": [{"time": s["start"], "text": s["text"], "words": s["words"]} for s in whisper_segments]
-        }))
-        return
+        if lrclib_line_times:
+            # We have official synced lyrics but Whisper failed to understand the vocals.
+            # Instead of falling back to Whisper's hallucinated garbage, we ignore Whisper
+            # and just interpolate the official lyrics using their official line timestamps.
+            whisper_texts = []
+            whisper_words_flat = []
+            whisper_segments = []
+            sm = difflib.SequenceMatcher(None, lrclib_texts, whisper_texts)
+        else:
+            # Global Mismatch and no official timestamps! Fallback to pure Whisper transcription
+            print(json.dumps({
+                "source": "whisper_fallback", 
+                "lyrics": [{"time": s["start"], "text": s["text"], "words": s["words"]} for s in whisper_segments]
+            }))
+            return
     
     # Map each lrclib word to a start/end time
     mapped_flat_words = []
