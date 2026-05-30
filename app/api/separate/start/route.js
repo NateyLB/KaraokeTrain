@@ -122,17 +122,18 @@ export async function runBackgroundSeparation(song, jobId, uploadDir, baseUrl = 
 
         } else {
           // Fallback to local yt-dlp execution (SECURITY: Using spawn to prevent command injection)
-          const ytdlp = spawn('yt-dlp', [
+          const ytdlpArgs = [
             '-f', 'bestaudio[ext=m4a]/bestaudio',
             '-o', inputPath,
             '--no-playlist',
             '--max-filesize', '50m',
-            '--cookies-from-browser', 'chrome',
             '--js-runtimes', 'node',
             '--remote-components', 'ejs:github',
             '--force-overwrites',
             url
-          ]);
+          ];
+
+          const ytdlp = spawn('yt-dlp', ytdlpArgs);
 
           let stderrOutput = '';
           let stdoutOutput = '';
