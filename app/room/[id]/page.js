@@ -540,15 +540,17 @@ export default function RoomPage({ params }) {
   // Global Overlay UI (Always visible)
   const renderGlobalOverlays = (showSearchWidget = true) => (
     <>
-      {showSearchWidget && !isSearchOpen && (
+      {!isSearchOpen && (
           <div style={{ position: 'fixed', top: '1rem', right: '1rem', zIndex: 50, display: 'flex', gap: '0.5rem' }}>
-            <button 
-              onClick={() => setIsSearchOpen(true)}
-              title="Search Songs"
-              style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', borderRadius: '50%', width: '3rem', height: '3rem', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', cursor: 'pointer', boxShadow: '0 0.25rem 0.75rem rgba(0,0,0,0.3)' }}
-            >
-              <Search size={20} />
-            </button>
+            {showSearchWidget && (
+                <button 
+                  onClick={() => setIsSearchOpen(true)}
+                  title="Search Songs"
+                  style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', borderRadius: '50%', width: '3rem', height: '3rem', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', cursor: 'pointer', boxShadow: '0 0.25rem 0.75rem rgba(0,0,0,0.3)' }}
+                >
+                  <Search size={20} />
+                </button>
+            )}
             <button 
               onClick={() => setIsQueueOpen(!isQueueOpen)}
               title="Toggle Queue"
@@ -869,9 +871,21 @@ export default function RoomPage({ params }) {
                               <span style={{ fontSize: '0.9rem', opacity: 0.8 }}>s</span>
                           </div>
                           <button onClick={() => setLyricsOffset(o => Math.round(((Number(o) || 0) + 0.5) * 100) / 100)} style={{ color: 'white', padding: '0.5rem', fontWeight: 'bold', background: 'transparent', border: 'none', cursor: 'pointer' }}>+</button>
-                          {lyricsOffset !== 0 && (
-                              <button onClick={() => setLyricsOffset(0)} style={{ color: 'var(--secondary-accent)', padding: '0.5rem', fontSize: '0.8rem', fontWeight: 'bold', background: 'transparent', border: 'none', cursor: 'pointer' }}>Reset</button>
-                          )}
+                          <button 
+                              onClick={() => setLyricsOffset(0)} 
+                              style={{ 
+                                  color: 'var(--secondary-accent)', 
+                                  padding: '0.5rem', 
+                                  fontSize: '0.8rem', 
+                                  fontWeight: 'bold', 
+                                  background: 'transparent', 
+                                  border: 'none', 
+                                  cursor: 'pointer',
+                                  visibility: lyricsOffset !== 0 ? 'visible' : 'hidden'
+                              }}
+                          >
+                              Reset
+                          </button>
                       </div>
                       );
                   })()}
