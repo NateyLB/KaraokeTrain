@@ -18,6 +18,9 @@ app.get('/download', (req, res) => {
     '-f', 'bestaudio[ext=m4a]/bestaudio',
     '--no-playlist',
     '--max-filesize', '50m',
+    '--cookies-from-browser', browser,
+    '--js-runtimes', 'node',
+    '--remote-components', 'ejs:github',
     '-o', '-', // Stream to stdout
     url
   ]);

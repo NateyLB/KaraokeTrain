@@ -127,6 +127,9 @@ export async function runBackgroundSeparation(song, jobId, uploadDir, baseUrl = 
             '-o', inputPath,
             '--no-playlist',
             '--max-filesize', '50m',
+            '--cookies-from-browser', 'chrome',
+            '--js-runtimes', 'node',
+            '--remote-components', 'ejs:github',
             '--force-overwrites',
             url
           ]);
