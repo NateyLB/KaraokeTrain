@@ -116,6 +116,14 @@ export async function POST(request) {
       const { index } = body;
       if (typeof index !== 'number') return NextResponse.json({ error: 'Index required' }, { status: 400 });
       updatedParty = partyStore.playNow(partyId, index);
+    } else if (action === 'updateSettings') {
+      const { settings, sender } = body;
+      if (!settings || !sender) return NextResponse.json({ error: 'Settings and sender required' }, { status: 400 });
+      updatedParty = partyStore.updateSettings(partyId, settings, sender);
+    } else if (action === 'remoteControl') {
+      const { command } = body;
+      if (!command) return NextResponse.json({ error: 'Command required' }, { status: 400 });
+      updatedParty = partyStore.setRemoteCommand(partyId, command);
     } else {
       return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
     }

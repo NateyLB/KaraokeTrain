@@ -115,7 +115,66 @@ export default function RoomPage({ params }) {
     }
   }, [currentSongTime, autoTuneOn, guideNotes, isListening, setVocoderTargetFrequency]);
   
-  // 1. Polling the Party State
+    // 1. Polling the Party State
+  const lastSyncedSettingsTimestamp = useRef(0);
+  const lastProcessedCommandTimestamp = useRef(0);
+  const syncTimeoutRef = useRef(null);
+  const isSyncingFromServer = useRef(false);
+
+  const syncSettingsToServer = (partialSettings) => {
+      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+      syncTimeoutRef.current = setTimeout(() => {
+          fetch('/api/party', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  action: 'updateSettings',
+                  id: roomId,
+                  sender: 'host',
+                  settings: partialSettings
+              })
+          }).catch(err => console.error("Sync error", err));
+      }, 300); // 300ms debounce
+  };
+
+  // Automatically sync local changes UP to the server
+  const lastLocalInteractionTimestamp = useRef(0);
+  
+  useEffect(() => {
+      if (isSyncingFromServer.current) return;
+      lastLocalInteractionTimestamp.current = Date.now();
+      syncSettingsToServer({
+          isPlaying,
+          lyricsOffset,
+          vocalsEnabled,
+          vocalsVolume,
+          micEnabled: isListening,
+          micVolume,
+          echoOn,
+          autoTuneOn,
+          isVideoVisible
+      });
+  }, [isPlaying, lyricsOffset, vocalsEnabled, vocalsVolume, isListening, micVolume, echoOn, autoTuneOn, isVideoVisible]);
+
+  const togglePlayRef = useRef(null);
+  const handleNextSongRef = useRef(null);
+  const alignStartRef = useRef(null);
+  const startListeningRef = useRef(null);
+  const stopListeningRef = useRef(null);
+
+  useEffect(() => {
+    togglePlayRef.current = togglePlay;
+    handleNextSongRef.current = handleNextSong;
+    startListeningRef.current = startListening;
+    stopListeningRef.current = stopListening;
+    alignStartRef.current = () => {
+        if (parsedLyrics.length > 0) {
+            const firstValidLine = parsedLyrics.find(l => l.text.trim().length > 0) || parsedLyrics[0];
+            setLyricsOffset((currentSongTime - firstValidLine.time).toFixed(2));
+        }
+    };
+  });
+
   useEffect(() => {
     const fetchState = async () => {
       try {
@@ -123,8 +182,52 @@ export default function RoomPage({ params }) {
         if (res.ok) {
           const data = await res.json();
           setPartyState(data);
+          
+          // Apply Remote Settings
+          if (data.settings && data.settings.timestamp > lastSyncedSettingsTimestamp.current) {
+              if (data.settings.lastUpdatedBy === 'remote') {
+                  // Race condition fix: Ignore server state if we just interacted locally!
+                  if (Date.now() - lastLocalInteractionTimestamp.current < 2000) return;
+                  
+                  isSyncingFromServer.current = true;
+                  
+                  if (data.settings.lyricsOffset !== undefined) setLyricsOffset(data.settings.lyricsOffset);
+                  if (data.settings.vocalsEnabled !== undefined) setVocalsEnabled(data.settings.vocalsEnabled);
+                  if (data.settings.vocalsVolume !== undefined) setVocalsVolume(data.settings.vocalsVolume);
+                  if (data.settings.micEnabled !== undefined) {
+                      if (data.settings.micEnabled && startListeningRef.current) startListeningRef.current();
+                      else if (!data.settings.micEnabled && stopListeningRef.current) stopListeningRef.current();
+                  }
+                  if (data.settings.micVolume !== undefined) setMicVolume(data.settings.micVolume);
+                  if (data.settings.echoOn !== undefined) setEchoOn(data.settings.echoOn);
+                  if (data.settings.autoTuneOn !== undefined) setAutoTuneOn(data.settings.autoTuneOn);
+                  if (data.settings.isVideoVisible !== undefined) setIsVideoVisible(data.settings.isVideoVisible);
+                  
+                  // Handle Playback State specifically
+                  if (data.settings.isPlaying !== undefined && data.settings.isPlaying !== isPlayingRef.current) {
+                      // Only trigger a toggle if the remote explicitly changed the state
+                      if ((data.settings.isPlaying && !isPlayingRef.current) || (!data.settings.isPlaying && isPlayingRef.current)) {
+                          if (togglePlayRef.current) togglePlayRef.current();
+                      }
+                  }
+                  
+                  // Allow React to process state updates before re-enabling sync
+                  setTimeout(() => { isSyncingFromServer.current = false; }, 50);
+              }
+              lastSyncedSettingsTimestamp.current = data.settings.timestamp;
+          }
+
+          // Apply Remote Commands (like next)
+          if (data.remoteCommand && data.remoteCommand.timestamp > lastProcessedCommandTimestamp.current) {
+              if (data.remoteCommand.action === 'next') {
+                  if (handleNextSongRef.current) handleNextSongRef.current();
+              } else if (data.remoteCommand.action === 'alignStart') {
+                  if (alignStartRef.current) alignStartRef.current();
+              }
+              lastProcessedCommandTimestamp.current = data.remoteCommand.timestamp;
+          }
         }
-      } catch (err) {}
+      } catch (err) { console.error("Host Sync Loop Error:", err); }
     };
     fetchState();
     const interval = setInterval(fetchState, 1500);
@@ -401,6 +504,7 @@ export default function RoomPage({ params }) {
       if (ytPlayerRef.current) ytPlayerRef.current.pauseVideo();
       clearInterval(timeUpdateInterval.current);
       setIsPlaying(false);
+      isPlayingRef.current = false;
     } else {
       const allStems = ['vocals', 'no_vocals'];
       allStems.forEach(stemKey => {
@@ -939,6 +1043,7 @@ export default function RoomPage({ params }) {
                 // 1 = PLAYING, 2 = PAUSED, 3 = BUFFERING
                 if (event.data === 1) {
                     setIsPlaying(true);
+                    isPlayingRef.current = true;
                     // YouTube finished buffering and started playing. Start local audio!
                     const allStems = ['vocals', 'no_vocals'];
                     allStems.forEach(stemKey => {
@@ -946,9 +1051,24 @@ export default function RoomPage({ params }) {
                             audioRefs.current[stemKey].play().catch(e => console.error("Play prevented", e));
                         }
                     });
+
+                    // Ensure time tracking and lyrics scrolling start immediately!
+                    clearInterval(timeUpdateInterval.current);
+                    timeUpdateInterval.current = setInterval(() => {
+                        if (audioRefs.current['no_vocals']) {
+                            const current = audioRefs.current['no_vocals'].currentTime;
+                            setCurrentSongTime(current);
+                            if (audioRefs.current['no_vocals'].duration > 0 && current >= audioRefs.current['no_vocals'].duration - 1) {
+                                handleNextSong();
+                            }
+                        }
+                    }, 50);
+
                 } else if (event.data === 2) {
                     setIsPlaying(false);
-                    // YouTube is paused. Pause local audio to keep it in sync.
+                    isPlayingRef.current = false;
+                    // YouTube is paused. Pause local audio and time tracking.
+                    clearInterval(timeUpdateInterval.current);
                     const allStems = ['vocals', 'no_vocals'];
                     allStems.forEach(stemKey => {
                         if (audioRefs.current[stemKey] && !audioRefs.current[stemKey].paused) {
