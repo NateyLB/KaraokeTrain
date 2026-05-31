@@ -50,73 +50,86 @@ export function usePartySync(roomId, role, callbacks = {}) {
     });
   }, [isPlaying, lyricsOffset, vocalsEnabled, vocalsVolume, micEnabled, micVolume, echoOn, autoTuneOn, isVideoVisible]);
 
-  // Poll server every 1.5s
+  // Listen to SSE stream for zero-latency updates
   useEffect(() => {
-    const fetchState = async () => {
-      try {
-        const res = await fetch(`/api/party?id=${roomId}`);
-        if (!res.ok) return;
-        const data = await res.json();
+    let evtSource;
+    let reconnectTimeout;
 
-        useKaraokeStore.getState().setPartyState(data);
+    const connect = () => {
+      evtSource = new EventSource(`/api/party/stream?id=${roomId}`);
 
-        // Apply settings from the OTHER role
-        if (data.settings && data.settings.timestamp > lastSyncedSettingsTimestamp.current) {
-          if (data.settings.lastUpdatedBy === otherRole) {
-            // Race condition fix: ignore if we just interacted locally
-            if (Date.now() - lastLocalInteractionTimestamp.current < 2000) return;
+      evtSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          useKaraokeStore.getState().setPartyState(data);
 
-            isSyncingFromServer.current = true;
-            const s = data.settings;
-            const st = useKaraokeStore.getState();
+          // Apply settings from the OTHER role
+          if (data.settings && data.settings.timestamp > lastSyncedSettingsTimestamp.current) {
+            if (data.settings.lastUpdatedBy === otherRole) {
+              // Race condition fix: ignore if we just interacted locally
+              if (Date.now() - lastLocalInteractionTimestamp.current < 2000) return;
 
-            if (s.lyricsOffset !== undefined) st.setLyricsOffset(s.lyricsOffset);
-            if (s.vocalsEnabled !== undefined) st.setVocalsEnabled(s.vocalsEnabled);
-            if (s.vocalsVolume !== undefined) st.setVocalsVolume(s.vocalsVolume);
-            if (s.echoOn !== undefined) st.setEchoOn(s.echoOn);
-            if (s.autoTuneOn !== undefined) st.setAutoTuneOn(s.autoTuneOn);
-            if (s.isVideoVisible !== undefined) st.setIsVideoVisible(s.isVideoVisible);
+              isSyncingFromServer.current = true;
+              const s = data.settings;
+              const st = useKaraokeStore.getState();
 
-            // Mic: on host, call start/stopListening; on remote, just set state
-            if (s.micEnabled !== undefined) {
-              if (role === 'host') {
-                if (s.micEnabled && callbacksRef.current.onStartListening) callbacksRef.current.onStartListening();
-                else if (!s.micEnabled && callbacksRef.current.onStopListening) callbacksRef.current.onStopListening();
-              } else {
-                st.setMicEnabled(s.micEnabled);
+              if (s.lyricsOffset !== undefined) st.setLyricsOffset(s.lyricsOffset);
+              if (s.vocalsEnabled !== undefined) st.setVocalsEnabled(s.vocalsEnabled);
+              if (s.vocalsVolume !== undefined) st.setVocalsVolume(s.vocalsVolume);
+              if (s.echoOn !== undefined) st.setEchoOn(s.echoOn);
+              if (s.autoTuneOn !== undefined) st.setAutoTuneOn(s.autoTuneOn);
+              if (s.isVideoVisible !== undefined) st.setIsVideoVisible(s.isVideoVisible);
+
+              // Mic: on host, call start/stopListening; on remote, just set state
+              if (s.micEnabled !== undefined) {
+                if (role === 'host') {
+                  if (s.micEnabled && callbacksRef.current.onStartListening) callbacksRef.current.onStartListening();
+                  else if (!s.micEnabled && callbacksRef.current.onStopListening) callbacksRef.current.onStopListening();
+                } else {
+                  st.setMicEnabled(s.micEnabled);
+                }
               }
-            }
-            if (s.micVolume !== undefined) st.setMicVolume(s.micVolume);
+              if (s.micVolume !== undefined) st.setMicVolume(s.micVolume);
 
-            // Play/Pause: on host, call togglePlay; on remote, just set state
-            if (s.isPlaying !== undefined && s.isPlaying !== st.isPlaying) {
-              if (role === 'host' && callbacksRef.current.onTogglePlay) {
-                callbacksRef.current.onTogglePlay();
-              } else {
-                st.setIsPlaying(s.isPlaying);
+              // Play/Pause: on host, call togglePlay; on remote, just set state
+              if (s.isPlaying !== undefined && s.isPlaying !== st.isPlaying) {
+                if (role === 'host' && callbacksRef.current.onTogglePlay) {
+                  callbacksRef.current.onTogglePlay();
+                } else {
+                  st.setIsPlaying(s.isPlaying);
+                }
               }
-            }
 
-            setTimeout(() => { isSyncingFromServer.current = false; }, 50);
+              setTimeout(() => { isSyncingFromServer.current = false; }, 50);
+            }
+            lastSyncedSettingsTimestamp.current = data.settings.timestamp;
           }
-          lastSyncedSettingsTimestamp.current = data.settings.timestamp;
-        }
 
-        // Process remote commands (host-only)
-        if (role === 'host' && data.remoteCommand && data.remoteCommand.timestamp > lastProcessedCommandTimestamp.current) {
-          const cmd = data.remoteCommand.action;
-          if (cmd === 'nextSong' && callbacksRef.current.onNextSong) callbacksRef.current.onNextSong();
-          if (cmd === 'next' && callbacksRef.current.onNextSong) callbacksRef.current.onNextSong();
-          if (cmd === 'alignStart' && callbacksRef.current.onAlignStart) callbacksRef.current.onAlignStart();
-          lastProcessedCommandTimestamp.current = data.remoteCommand.timestamp;
+          // Process remote commands (host-only)
+          if (role === 'host' && data.remoteCommand && data.remoteCommand.timestamp > lastProcessedCommandTimestamp.current) {
+            const cmd = data.remoteCommand.action;
+            if (cmd === 'nextSong' && callbacksRef.current.onNextSong) callbacksRef.current.onNextSong();
+            if (cmd === 'next' && callbacksRef.current.onNextSong) callbacksRef.current.onNextSong();
+            if (cmd === 'alignStart' && callbacksRef.current.onAlignStart) callbacksRef.current.onAlignStart();
+            lastProcessedCommandTimestamp.current = data.remoteCommand.timestamp;
+          }
+        } catch (err) {
+          console.error(`${role} SSE parse error:`, err);
         }
-      } catch (err) {
-        console.error(`${role} sync loop error:`, err);
-      }
+      };
+
+      evtSource.onerror = (err) => {
+        console.error(`${role} SSE error:`, err);
+        evtSource.close();
+        reconnectTimeout = setTimeout(connect, 2000); // Auto-reconnect if dropped
+      };
     };
 
-    fetchState();
-    const interval = setInterval(fetchState, 1500);
-    return () => clearInterval(interval);
+    connect();
+
+    return () => {
+      if (evtSource) evtSource.close();
+      clearTimeout(reconnectTimeout);
+    };
   }, [roomId, role, otherRole]);
 }
