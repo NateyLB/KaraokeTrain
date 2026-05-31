@@ -3,7 +3,7 @@ import { partyStore } from '../../../lib/partyStore';
 import { jobQueue } from '../../../lib/jobQueue';
 import { runBackgroundSeparation } from '../separate/start/route';
 import { isValidVideoId, isValidPartyId } from '../../../lib/validators';
-import { checkRateLimit, canStartJob } from '../../../lib/rateLimiter';
+import { checkRateLimit, canStartJob, getClientIp } from '../../../lib/rateLimiter';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
@@ -41,9 +41,7 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     // Rate limit by IP
-    const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() 
-                   || request.headers.get('x-real-ip') 
-                   || 'unknown';
+    const clientIp = getClientIp(request);
     const rateCheck = checkRateLimit(`party:${clientIp}`, { maxRequests: 30, windowMs: 60000 });
     if (!rateCheck.allowed) {
       return NextResponse.json({ error: 'Too many requests. Please slow down.' }, { status: 429 });

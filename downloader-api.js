@@ -1,9 +1,40 @@
 import express from 'express';
 import { spawn } from 'child_process';
+import crypto from 'crypto';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
 const browser = process.env.COOKIES_BROWSER || 'chrome';
+const DOWNLOADER_SECRET = process.env.DOWNLOADER_SECRET;
+
+if (!DOWNLOADER_SECRET) {
+  console.error('[DOWNLOADER] ❌ FATAL: DOWNLOADER_SECRET env var is not set. Refusing to start without authentication.');
+  process.exit(1);
+}
+
+app.use((req, res, next) => {
+  console.log(`[DOWNLOADER] Incoming request headers:`, req.headers);
+  const authHeader = req.headers['authorization'];
+  const provided = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7) : null;
+  
+  if (!provided) {
+    console.warn(`[DOWNLOADER] ⚠️  Missing secret from ${req.ip} — ${req.method} ${req.path}`);
+    return res.status(403).json({ error: 'Forbidden: Missing secret header' });
+  }
+
+  // Prevent timingSafeEqual from throwing an error if lengths differ
+  if (provided.length !== DOWNLOADER_SECRET.length) {
+    console.warn(`[DOWNLOADER] ⚠️  Secret length mismatch from ${req.ip}. Expected ${DOWNLOADER_SECRET.length}, got ${provided.length}`);
+    return res.status(403).json({ error: 'Forbidden: Invalid secret length' });
+  }
+
+  if (!crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(DOWNLOADER_SECRET))) {
+    console.warn(`[DOWNLOADER] ⚠️  Secret value mismatch from ${req.ip}`);
+    return res.status(403).json({ error: 'Forbidden: Invalid secret value' });
+  }
+  
+  next();
+});
 
 app.get('/download', (req, res) => {
   const videoId = req.query.videoId;

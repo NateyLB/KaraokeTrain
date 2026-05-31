@@ -8,11 +8,18 @@ import { Readable } from 'stream';
 import { jobQueue } from '../../../../lib/jobQueue';
 import { uploadDirectory, checkCache, uploadJson } from '../../../../lib/storage';
 import { isValidVideoId } from '../../../../lib/validators';
-import { canStartJob, startJob, finishJob } from '../../../../lib/rateLimiter';
+import { canStartJob, startJob, finishJob, checkRateLimit, getClientIp } from '../../../../lib/rateLimiter';
 
 export const maxDuration = 300;
 
-export async function GET(request) {
+export async function POST(request) {
+  // Rate limit: max 5 separation requests per minute per IP
+  const clientIp = getClientIp(request);
+  const rateCheck = checkRateLimit(`separate:${clientIp}`, { maxRequests: 5, windowMs: 60000 });
+  if (!rateCheck.allowed) {
+    return NextResponse.json({ error: 'Too many processing requests. Please slow down.' }, { status: 429 });
+  }
+
   const { searchParams } = new URL(request.url);
   const videoId = searchParams.get('videoId');
   const title = searchParams.get('title') || 'Unknown Title';
@@ -58,7 +65,7 @@ export async function GET(request) {
       console.error("Background separation error:", err);
       const existing = jobQueue.get(videoId);
       if (existing?.status !== 'error') {
-        jobQueue.update(videoId, { status: 'error', error: `Processing failed: ${err.message}` });
+        jobQueue.update(videoId, { status: 'error', error: 'Processing failed. Please try again.' });
       }
     });
 
@@ -103,7 +110,9 @@ export async function runBackgroundSeparation(song, jobId, uploadDir, baseUrl = 
       try {
         if (process.env.DOWNLOADER_API_URL) {
           console.log(`[Cloud Run] Fetching from Local Downloader API: ${process.env.DOWNLOADER_API_URL}/download?videoId=${song.videoId}`);
-          const res = await fetch(`${process.env.DOWNLOADER_API_URL}/download?videoId=${song.videoId}`);
+          const res = await fetch(`${process.env.DOWNLOADER_API_URL}/download?videoId=${song.videoId}`, {
+            headers: { 'Authorization': `Bearer ${process.env.DOWNLOADER_SECRET || ''}` }
+          });
           if (!res.ok) {
             throw new Error(`Downloader API returned ${res.status}: ${await res.text()}`);
           }
@@ -167,8 +176,7 @@ export async function runBackgroundSeparation(song, jobId, uploadDir, baseUrl = 
     
     await new Promise((resolve, reject) => {
       // Spawn demucs using the python path from env, or fallback to the local venv
-      const defaultPythonPath = path.join(process.env.HOME || '', 'Desktop', 'GenAIProjects', 'MusicPractice', 'backend', '.venv', 'bin', 'python3');
-      const pythonPath = process.env.PYTHON_BIN_PATH || defaultPythonPath;
+      const pythonPath = process.env.PYTHON_BIN_PATH || 'python3';
       const cmdArgs = ['-m', 'demucs', '--out', uploadDir, '--two-stems', 'vocals', inputPath];
       const demucsProcess = spawn(pythonPath, cmdArgs);
 
@@ -315,7 +323,7 @@ export async function runBackgroundSeparation(song, jobId, uploadDir, baseUrl = 
     }, 30 * 60 * 1000);
 
   } catch (err) {
-    jobQueue.update(jobId, { status: 'error', error: `Processing failed: ${err.message}` });
+    jobQueue.update(jobId, { status: 'error', error: 'Processing failed. Please try again.' });
     throw err;
   } finally {
     finishJob();

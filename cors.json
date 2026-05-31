@@ -1,6 +1,6 @@
 [
   {
-    "origin": ["*"],
+    "origin": ["https://karaoketrain.com", "http://localhost:3000"],
     "method": ["GET", "HEAD", "OPTIONS"],
     "responseHeader": ["*"],
     "maxAgeSeconds": 3600

@@ -1,4 +1,5 @@
 import { fetchLyrics } from '../../../lib/lyrics';
+import { checkRateLimit, getClientIp } from '../../../lib/rateLimiter';
 
 function cleanMetadata(trackRaw, artistRaw) {
   // Remove content inside brackets/parentheses like (Official Video), [Lyric Video]
@@ -21,6 +22,13 @@ function cleanMetadata(trackRaw, artistRaw) {
 }
 
 export async function GET(request) {
+  // Rate limit: max 30 lyrics lookups per minute per IP
+  const clientIp = getClientIp(request);
+  const rateCheck = checkRateLimit(`room:${clientIp}`, { maxRequests: 30, windowMs: 60000 });
+  if (!rateCheck.allowed) {
+    return Response.json({ error: 'Too many requests. Please slow down.' }, { status: 429 });
+  }
+
   const { searchParams } = new URL(request.url);
   const trackRaw = searchParams.get('track');
   const artistRaw = searchParams.get('artist');

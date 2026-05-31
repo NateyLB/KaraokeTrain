@@ -1,5 +1,5 @@
 import { searchYouTube } from '../../../lib/youtube';
-import { checkRateLimit } from '../../../lib/rateLimiter';
+import { checkRateLimit, getClientIp } from '../../../lib/rateLimiter';
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
@@ -10,9 +10,7 @@ export async function GET(request) {
   }
 
   // SECURITY: Rate limit search requests to prevent YouTube API quota exhaustion
-  const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() 
-                 || request.headers.get('x-real-ip') 
-                 || 'unknown';
+  const clientIp = getClientIp(request);
   const rateCheck = checkRateLimit(`search:${clientIp}`, { maxRequests: 20, windowMs: 60000 });
   if (!rateCheck.allowed) {
     return Response.json({ error: 'Too many search requests. Please slow down.' }, { status: 429 });

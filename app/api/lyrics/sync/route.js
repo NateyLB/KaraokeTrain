@@ -2,11 +2,19 @@ import { NextResponse } from 'next/server';
 import { runWhisper } from '../../../../lib/whisper_runner';
 import { isValidJobId } from '../../../../lib/validators';
 import { checkCache, uploadJson } from '../../../../lib/storage';
+import { checkRateLimit, getClientIp } from '../../../../lib/rateLimiter';
 import path from 'path';
 import fs from 'fs';
 
 
 export async function POST(request) {
+  // Rate limit: max 3 Whisper sync requests per minute per IP (very expensive operation)
+  const clientIp = getClientIp(request);
+  const rateCheck = checkRateLimit(`whisper:${clientIp}`, { maxRequests: 3, windowMs: 60000 });
+  if (!rateCheck.allowed) {
+    return NextResponse.json({ error: 'Too many sync requests. Please slow down.' }, { status: 429 });
+  }
+
   try {
     const body = await request.json();
     const { jobId, plainLyrics } = body;

@@ -13,11 +13,7 @@ BUCKET_NAME="stems-lyrics"
 echo "🚀 Building and pushing Docker image using Google Cloud Build..."
 gcloud builds submit --tag $IMAGE_NAME .
 
-# Load environment variables from .env.local if it exists
-if [ -f .env.local ]; then
-  export $(grep -v '^#' .env.local | xargs)
-fi
-
+# (No longer exporting .env.local to the shell to protect secrets)
 echo "🚢 Deploying to Cloud Run..."
 gcloud run deploy $SERVICE_NAME \
   --image $IMAGE_NAME \
@@ -31,6 +27,7 @@ gcloud run deploy $SERVICE_NAME \
   --max-instances 1 \
   --no-cpu-throttling \
   --timeout 3600 \
-  --set-env-vars="STORAGE_MODE=gcs,GCS_BUCKET_NAME=$BUCKET_NAME,YOUTUBE_API_KEY=$YOUTUBE_API_KEY"
+  --set-env-vars="STORAGE_MODE=gcs,GCS_BUCKET_NAME=$BUCKET_NAME,DOWNLOADER_API_URL=https://downloader.karaoketrain.com" \
+  --update-secrets="YOUTUBE_API_KEY=YOUTUBE_API_KEY:latest,DOWNLOADER_SECRET=DOWNLOADER_SECRET:latest"
 
 echo "✅ Deployment complete!"

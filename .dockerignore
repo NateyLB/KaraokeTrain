@@ -6,3 +6,17 @@ node_modules
 .venv
 uploads/*
 !uploads/.gitkeep
+
+# Test files and scripts
+test*
+*.m4a
+*.py
+scratch/
+server.log
+
+# Deployment and config files not needed in image
+deploy.sh
+cors.json
+CLAUDE.md
+AGENTS.md
+README.md

@@ -123,7 +123,7 @@ export default function RemotePage({ params }) {
         setPartyState(data);
 
         // Pre-process the song instantly
-        fetch(`/api/separate/start?videoId=${track.videoId}&title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}`)
+        fetch(`/api/separate/start?videoId=${track.videoId}&title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}`, { method: 'POST' })
           .catch(err => console.error("Failed to start processing", err));
       }
     } catch (err) {
