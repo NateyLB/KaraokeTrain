@@ -1,102 +1,20 @@
 "use client";
 
-import { useState, useEffect, use, useRef } from 'react';
-import { Music2, Clock, CheckCircle2, Trash2, ChevronUp, ChevronDown, Play, Pause, Mic, MicOff, Volume2, VolumeX, SkipForward, Settings, Waves, Sparkles, X, Video } from 'lucide-react';
+import { use } from 'react';
+import { Music2, Clock, CheckCircle2, Trash2, ChevronUp, ChevronDown, Play } from 'lucide-react';
 import SearchBar from '../../../components/SearchBar';
+import RemoteControls from '../../../components/RemoteControls';
+import useKaraokeStore from '../../../store/useKaraokeStore';
+import { usePartySync } from '../../../hooks/usePartySync';
 
 export default function RemotePage({ params }) {
   const unwrappedParams = use(params);
   const roomId = unwrappedParams.id.toUpperCase();
-  
-  const [partyState, setPartyState] = useState(null);
-  const [toast, setToast] = useState('');
 
-  // Settings State
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [vocalsEnabled, setVocalsEnabled] = useState(true);
-  const [vocalsVolume, setVocalsVolume] = useState(1.0);
-  const [lyricsOffset, setLyricsOffset] = useState(0);
-  const [isListening, setIsListening] = useState(false);
-  const [micVolume, setMicVolume] = useState(1.0);
-  const [echoOn, setEchoOn] = useState(false);
-  const [autoTuneOn, setAutoTuneOn] = useState(false);
-  const [isVideoVisible, setIsVideoVisible] = useState(false);
-  
-  const lastSyncedSettingsTimestamp = useRef(0);
-  const syncTimeoutRef = useRef(null);
-  const isSyncingFromServer = useRef(false);
-  const lastLocalInteractionTimestamp = useRef(0);
+  const { partyState, setPartyState, toast, setToast } = useKaraokeStore();
 
-  const syncSettingsToServer = (partialSettings) => {
-      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
-      syncTimeoutRef.current = setTimeout(() => {
-          fetch('/api/party', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                  action: 'updateSettings',
-                  id: roomId,
-                  sender: 'remote',
-                  settings: partialSettings
-              })
-          }).catch(err => console.error("Sync error", err));
-      }, 300);
-  };
-
-  useEffect(() => {
-      if (isSyncingFromServer.current) return;
-      lastLocalInteractionTimestamp.current = Date.now();
-      syncSettingsToServer({
-          isPlaying,
-          lyricsOffset,
-          vocalsEnabled,
-          vocalsVolume,
-          micEnabled: isListening,
-          micVolume,
-          echoOn,
-          autoTuneOn,
-          isVideoVisible
-      });
-  }, [isPlaying, lyricsOffset, vocalsEnabled, vocalsVolume, isListening, micVolume, echoOn, autoTuneOn, isVideoVisible]);
-
-  // Poll for party state
-  useEffect(() => {
-    const fetchState = async () => {
-      try {
-        const res = await fetch(`/api/party?id=${roomId}`);
-        if (res.ok) {
-          const data = await res.json();
-          setPartyState(data);
-          
-          if (data.settings && data.settings.timestamp > lastSyncedSettingsTimestamp.current) {
-              if (data.settings.lastUpdatedBy === 'host') {
-                  if (Date.now() - lastLocalInteractionTimestamp.current < 2000) return;
-                  
-                  isSyncingFromServer.current = true;
-                  
-                  if (data.settings.lyricsOffset !== undefined) setLyricsOffset(data.settings.lyricsOffset);
-                  if (data.settings.vocalsEnabled !== undefined) setVocalsEnabled(data.settings.vocalsEnabled);
-                  if (data.settings.micEnabled !== undefined) setIsListening(data.settings.micEnabled);
-                  if (data.settings.micVolume !== undefined) setMicVolume(data.settings.micVolume);
-                  if (data.settings.echoOn !== undefined) setEchoOn(data.settings.echoOn);
-                  if (data.settings.autoTuneOn !== undefined) setAutoTuneOn(data.settings.autoTuneOn);
-                  if (data.settings.isVideoVisible !== undefined) setIsVideoVisible(data.settings.isVideoVisible);
-                  if (data.settings.isPlaying !== undefined) setIsPlaying(data.settings.isPlaying);
-                  
-                  setTimeout(() => { isSyncingFromServer.current = false; }, 50);
-              }
-              lastSyncedSettingsTimestamp.current = data.settings.timestamp;
-          }
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    };
-    
-    fetchState();
-    const interval = setInterval(fetchState, 1500);
-    return () => clearInterval(interval);
-  }, [roomId]);
+  // Sync with server
+  usePartySync(roomId, 'remote');
 
   const handleQueueSong = async (track) => {
     try {
@@ -118,7 +36,6 @@ export default function RemotePage({ params }) {
       if (res.ok) {
         setToast(`Added "${track.title}" to queue!`);
         setTimeout(() => setToast(''), 3000);
-        // Force immediate refresh of state
         const data = await res.json();
         setPartyState(data);
 
@@ -151,17 +68,12 @@ export default function RemotePage({ params }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'playNow', id: roomId, index })
       });
-      if (res.ok) {
-        const data = await res.json();
-        setPartyState(data);
-      }
-    } catch (err) {
-      console.error(err);
-    }
+      if (res.ok) setPartyState(await res.json());
+    } catch (err) { console.error(err); }
   };
 
   const handleReorderSong = async (oldIndex, newIndex) => {
-    if (newIndex < 0 || newIndex >= partyState.queue.length) return;
+    if (!partyState || newIndex < 0 || newIndex >= partyState.queue.length) return;
     try {
       const res = await fetch('/api/party', {
         method: 'POST',
@@ -169,16 +81,6 @@ export default function RemotePage({ params }) {
         body: JSON.stringify({ action: 'reorder', id: roomId, oldIndex, newIndex })
       });
       if (res.ok) setPartyState(await res.json());
-    } catch (err) { console.error(err); }
-  };
-
-  const handleNextSong = async () => {
-    try {
-      await fetch('/api/party', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'remoteControl', id: roomId, command: 'next' })
-      });
     } catch (err) { console.error(err); }
   };
 
@@ -204,84 +106,7 @@ export default function RemotePage({ params }) {
       </div>
 
       {/* Remote Playback Controls */}
-      <div style={{ background: 'rgba(20, 20, 25, 0.8)', backdropFilter: 'blur(10px)', padding: '1.5rem', borderRadius: '1rem', border: '1px solid var(--glass-border)', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          {/* Main Playback Row */}
-          <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', alignItems: 'center' }}>
-              <button onClick={() => setIsPlaying(!isPlaying)} className="btn-primary" style={{ padding: '0.75rem', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '3.5rem', height: '3.5rem' }}>
-                  {isPlaying ? <Pause size={28} fill="currentColor" /> : <Play size={28} fill="currentColor" style={{ marginLeft: '0.2rem' }} />}
-              </button>
-              <button onClick={handleNextSong} className="btn-secondary" style={{ padding: '0.75rem 1.5rem', borderRadius: '99px', fontSize: '1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <SkipForward size={20} /> Next Song
-              </button>
-          </div>
-          
-          <div style={{ height: '1px', background: 'var(--glass-border)', width: '100%' }}></div>
-
-          {/* Mixing Controls */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <h4 style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-main)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Settings size={16} color="var(--secondary-accent)"/> Mixing Console</h4>
-                  
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      {/* Video Toggle */}
-                      <button onClick={() => setIsVideoVisible(!isVideoVisible)} style={{ padding: '0.4rem 0.8rem', borderRadius: '99px', fontSize: '0.8rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', background: isVideoVisible ? 'var(--primary-accent)' : 'var(--glass-bg)', border: 'none', color: 'white' }}>
-                          <Video size={16} />
-                          {isVideoVisible ? 'Hide Video' : 'Show Video'}
-                      </button>
-                      
-                      {/* Vocals Toggle */}
-                      <button onClick={() => setVocalsEnabled(!vocalsEnabled)} style={{ padding: '0.4rem 0.8rem', borderRadius: '99px', fontSize: '0.8rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', background: vocalsEnabled ? 'var(--primary-accent)' : 'var(--glass-bg)', border: 'none', color: 'white' }}>
-                          {vocalsEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
-                          {vocalsEnabled ? 'Vocals On' : 'Vocals Off'}
-                      </button>
-                  </div>
-              </div>
-
-              {/* Sliders */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <button onClick={() => setIsListening(!isListening)} style={{ padding: '0.4rem 0.8rem', borderRadius: '99px', fontSize: '0.8rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', background: isListening ? 'var(--secondary-accent)' : 'var(--glass-bg)', border: 'none', color: isListening ? '#1a1a1a' : 'var(--text-muted)' }}>
-                   {isListening ? <Mic size={16} /> : <MicOff size={16} />}
-                   {isListening ? 'Mic On' : 'Mic Off'}
-                </button>
-                <input type="range" min={0} max={1} step={0.01} value={micVolume} onChange={(e) => setMicVolume(parseFloat(e.target.value))} disabled={!isListening} style={{ flex: 1, accentColor: 'var(--secondary-accent)', cursor: isListening ? 'pointer' : 'not-allowed', opacity: isListening ? 1 : 0.4 }} />
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', width: '20px', textAlign: 'center' }}>V</span>
-                <input type="range" min={0} max={1} step={0.01} value={vocalsVolume} onChange={(e) => setVocalsVolume(parseFloat(e.target.value))} disabled={!vocalsEnabled} style={{ flex: 1, accentColor: 'var(--secondary-accent)', cursor: vocalsEnabled ? 'pointer' : 'not-allowed', opacity: vocalsEnabled ? 1 : 0.4 }} />
-              </div>
-              
-              {/* Mic Effects */}
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <button onClick={() => setEchoOn(!echoOn)} style={{ flex: 1, padding: '0.5rem', borderRadius: '0.5rem', background: echoOn ? 'rgba(139, 92, 246, 0.2)' : 'var(--glass-bg)', border: `1px solid ${echoOn ? 'var(--primary-accent)' : 'var(--glass-border)'}`, color: echoOn ? 'var(--primary-accent)' : 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}>
-                  <Waves size={14} /> Echo
-                </button>
-                <button onClick={() => setAutoTuneOn(!autoTuneOn)} style={{ flex: 1, padding: '0.5rem', borderRadius: '0.5rem', background: autoTuneOn ? 'rgba(236, 72, 153, 0.2)' : 'var(--glass-bg)', border: `1px solid ${autoTuneOn ? 'var(--secondary-accent)' : 'var(--glass-border)'}`, color: autoTuneOn ? 'var(--secondary-accent)' : 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}>
-                  <Sparkles size={14} /> AutoTune
-                </button>
-              </div>
-
-              {/* Align Controls */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--glass-bg)', padding: '0.5rem 1rem', borderRadius: '99px', border: '1px solid var(--glass-border)', marginTop: '0.5rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>Lyrics Sync</span>
-                      <button onClick={() => {
-                          fetch('/api/party', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ action: 'remoteControl', id: roomId, command: 'alignStart' })
-                          });
-                      }} style={{ padding: '0.2rem 0.6rem', borderRadius: '99px', fontSize: '0.7rem', fontWeight: 'bold', background: 'var(--secondary-accent)', color: '#1a1a1a', border: 'none', cursor: 'pointer' }}>
-                          Align Start
-                      </button>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <button onClick={() => setLyricsOffset(o => Math.round(((Number(o) || 0) - 0.5) * 100) / 100)} style={{ color: 'white', padding: '0.2rem 0.5rem', fontWeight: 'bold', background: 'transparent', border: 'none', cursor: 'pointer' }}>-</button>
-                      <span style={{ fontSize: '0.9rem', color: 'white', minWidth: '2rem', textAlign: 'center' }}>{(Number(lyricsOffset) || 0).toFixed(1)}s</span>
-                      <button onClick={() => setLyricsOffset(o => Math.round(((Number(o) || 0) + 0.5) * 100) / 100)} style={{ color: 'white', padding: '0.2rem 0.5rem', fontWeight: 'bold', background: 'transparent', border: 'none', cursor: 'pointer' }}>+</button>
-                  </div>
-              </div>
-          </div>
-      </div>
+      <RemoteControls roomId={roomId} />
 
       <div style={{ flex: 1 }}></div>
 

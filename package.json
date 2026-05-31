@@ -19,7 +19,8 @@
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-youtube": "^10.1.0",
-    "replicate": "^1.4.0"
+    "replicate": "^1.4.0",
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
     "eslint": "^9",
