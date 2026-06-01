@@ -155,6 +155,7 @@ export function useSongLoader(roomId) {
       // 3. Set Lyrics
       if (backgroundLyrics) {
         store.setParsedLyrics(backgroundLyrics);
+        store.setFirstValidTime((backgroundLyrics.find(l => l.text.trim().length > 0) || backgroundLyrics[0])?.time || 0);
         store.setLyricsSource(
           backgroundSource === 'lrclib_aligned'
             ? 'LRCLIB + Whisper AI'
@@ -201,6 +202,7 @@ export function useSongLoader(roomId) {
 
       if (aiRes.ok && aiData.lyrics) {
         store.setParsedLyrics(aiData.lyrics);
+        store.setFirstValidTime((aiData.lyrics.find(l => l.text.trim().length > 0) || aiData.lyrics[0])?.time || 0);
         store.setLyricsSource(
           aiData.source === 'lrclib_aligned'
             ? 'LRCLIB + Whisper AI'
@@ -208,9 +210,11 @@ export function useSongLoader(roomId) {
         );
       } else if (fetchedLyrics && fetchedLyrics.some(l => l.time > 0)) {
         store.setParsedLyrics(fetchedLyrics);
+        store.setFirstValidTime((fetchedLyrics.find(l => l.text.trim().length > 0) || fetchedLyrics[0])?.time || 0);
         store.setLyricsSource('LRCLIB (Original Sync - Whisper Failed)');
       } else {
         store.setParsedLyrics([]);
+        store.setFirstValidTime(0);
         store.setLyricsSource('No Lyrics Found');
       }
     } catch (e) {

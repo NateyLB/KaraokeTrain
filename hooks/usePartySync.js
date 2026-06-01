@@ -39,16 +39,16 @@ export function usePartySync(roomId, role, callbacks = {}) {
   };
 
   // Watch for local setting changes -> sync to server
-  const { isPlaying, lyricsOffset, vocalsEnabled, vocalsVolume, micEnabled, micVolume, echoOn, autoTuneOn, isVideoVisible } = useKaraokeStore();
+  const { isPlaying, lyricsOffset, firstValidTime, vocalsEnabled, vocalsVolume, micEnabled, micVolume, echoOn, autoTuneOn, isVideoVisible } = useKaraokeStore();
 
   useEffect(() => {
     if (isSyncingFromServer.current) return;
     lastLocalInteractionTimestamp.current = Date.now();
     syncSettingsToServer({
-      isPlaying, lyricsOffset, vocalsEnabled, vocalsVolume,
+      isPlaying, lyricsOffset, firstValidTime, vocalsEnabled, vocalsVolume,
       micEnabled, micVolume, echoOn, autoTuneOn, isVideoVisible
     });
-  }, [isPlaying, lyricsOffset, vocalsEnabled, vocalsVolume, micEnabled, micVolume, echoOn, autoTuneOn, isVideoVisible]);
+  }, [isPlaying, lyricsOffset, firstValidTime, vocalsEnabled, vocalsVolume, micEnabled, micVolume, echoOn, autoTuneOn, isVideoVisible]);
 
   // Listen to SSE stream for zero-latency updates
   useEffect(() => {
@@ -74,6 +74,7 @@ export function usePartySync(roomId, role, callbacks = {}) {
               const st = useKaraokeStore.getState();
 
               if (s.lyricsOffset !== undefined) st.setLyricsOffset(s.lyricsOffset);
+              if (s.firstValidTime !== undefined) st.setFirstValidTime(s.firstValidTime);
               if (s.vocalsEnabled !== undefined) st.setVocalsEnabled(s.vocalsEnabled);
               if (s.vocalsVolume !== undefined) st.setVocalsVolume(s.vocalsVolume);
               if (s.echoOn !== undefined) st.setEchoOn(s.echoOn);
@@ -114,7 +115,8 @@ export function usePartySync(roomId, role, callbacks = {}) {
       };
 
       evtSource.onerror = (err) => {
-        console.error(`${role} SSE error:`, err);
+        // SSE connection dropped (normal on timeouts/network changes).
+        // The EventSource will auto-reconnect, but we close and manual reconnect to ensure clean state.
         evtSource.close();
         reconnectTimeout = setTimeout(connect, 2000); // Auto-reconnect if dropped
       };

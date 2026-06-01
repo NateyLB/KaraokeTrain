@@ -11,6 +11,7 @@ const useKaraokeStore = create((set, get) => ({
   // === Synced Settings (bi-directional Host <-> Remote via server) ===
   isPlaying: false,
   lyricsOffset: 0,
+  firstValidTime: 0,
   vocalsEnabled: true,
   vocalsVolume: 1.0,
   micEnabled: false,
@@ -21,6 +22,7 @@ const useKaraokeStore = create((set, get) => ({
 
   setIsPlaying: (v) => set({ isPlaying: v }),
   setLyricsOffset: (v) => set(state => ({ lyricsOffset: typeof v === 'function' ? v(state.lyricsOffset) : v })),
+  setFirstValidTime: (v) => set({ firstValidTime: v }),
   setVocalsEnabled: (v) => set({ vocalsEnabled: v }),
   setVocalsVolume: (v) => set({ vocalsVolume: v }),
   setMicEnabled: (v) => set({ micEnabled: v }),
@@ -35,6 +37,7 @@ const useKaraokeStore = create((set, get) => ({
     return {
       isPlaying: s.isPlaying,
       lyricsOffset: s.lyricsOffset,
+      firstValidTime: s.firstValidTime,
       vocalsEnabled: s.vocalsEnabled,
       vocalsVolume: s.vocalsVolume,
       micEnabled: s.micEnabled,
@@ -88,6 +91,7 @@ const useKaraokeStore = create((set, get) => ({
     guideNotes: [],
     lyricsSource: 'Loading...',
     lyricsOffset: 0,
+    firstValidTime: 0,
   }),
 }));
 

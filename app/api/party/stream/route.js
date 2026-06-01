@@ -17,6 +17,8 @@ export async function GET(request) {
 
   const stream = new ReadableStream({
     start(controller) {
+      const encoder = new TextEncoder();
+      
       // Helper to serialize and push data
       const sendParty = (party) => {
         const queueWithStatus = party.queue.map(song => ({
@@ -35,7 +37,7 @@ export async function GET(request) {
           currentSong: currentSongWithStatus
         };
 
-        controller.enqueue(`data: ${JSON.stringify(payload)}\n\n`);
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
       };
 
       // 1. Immediately send the current state upon connection
@@ -51,8 +53,18 @@ export async function GET(request) {
         global.partyEvents.on(eventName, onUpdate);
       }
 
+      // Ping to keep connection alive
+      const pingInterval = setInterval(() => {
+        try {
+          controller.enqueue(encoder.encode(`: ping\n\n`));
+        } catch (e) {
+          clearInterval(pingInterval);
+        }
+      }, 30000);
+
       // Cleanup on client disconnect
       request.signal.addEventListener('abort', () => {
+        clearInterval(pingInterval);
         if (global.partyEvents) {
           global.partyEvents.off(eventName, onUpdate);
         }
