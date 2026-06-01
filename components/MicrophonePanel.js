@@ -1,11 +1,83 @@
 'use client';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Mic, MicOff, X, Waves, Sparkles, AlertCircle } from 'lucide-react';
 import useKaraokeStore from '../store/useKaraokeStore';
+import { useAudioAnalyzer } from '../hooks/useAudioAnalyzer';
 
-export default function MicrophonePanel({ isListening, startListening, stopListening, setMicVolume, micError }) {
-  const { vocalsEnabled, vocalsVolume, setVocalsVolume, echoOn, setEchoOn, autoTuneOn, setAutoTuneOn, isMicExpanded, setIsMicExpanded } = useKaraokeStore();
+/**
+ * Fully self-contained microphone panel.
+ * Owns useAudioAnalyzer internally — no mic props needed from parent.
+ * Manages: echo sync, autotune pitch targeting, mic↔store bridge, auto-stop.
+ */
+export default function MicrophonePanel() {
+  const {
+    vocalsEnabled, vocalsVolume, setVocalsVolume,
+    echoOn, setEchoOn, autoTuneOn, setAutoTuneOn,
+    isMicExpanded, setIsMicExpanded,
+    currentSongTime, guideNotes, partyState, isLoading,
+    micVolume, setMicVolume
+  } = useKaraokeStore();
 
+  // === Own the mic hook ===
+  const {
+    isListening, pitch,
+    startListening, stopListening, setMicVolume: applyMicGain,
+    setEchoEnabled, setVocoderTargetFrequency,
+    error: micError,
+  } = useAudioAnalyzer();
+
+  // === Bridge mic volume → AudioAnalyzer gain ===
+  useEffect(() => {
+    applyMicGain(micVolume);
+  }, [micVolume, applyMicGain]);
+
+  // === Bridge mic state → Zustand store (outbound: local mic change → store) ===
+  useEffect(() => {
+    useKaraokeStore.getState().setMicEnabled(isListening);
+  }, [isListening]);
+
+  // === Bridge store → mic state (inbound: remote toggle → actual mic) ===
+  const storeMicEnabled = useKaraokeStore(s => s.micEnabled);
+  useEffect(() => {
+    if (storeMicEnabled && !isListening) {
+      startListening();
+    } else if (!storeMicEnabled && isListening) {
+      stopListening();
+    }
+  }, [storeMicEnabled]);
+
+  // === Echo sync ===
+  useEffect(() => {
+    setEchoEnabled(echoOn);
+  }, [echoOn, setEchoEnabled]);
+
+  // === AutoTune target pitch ===
+  useEffect(() => {
+    if (!autoTuneOn || !isListening) {
+      setVocoderTargetFrequency(0);
+      return;
+    }
+    if (guideNotes) {
+      const activeGuideNote = guideNotes.find(
+        n => currentSongTime >= n.startTime && currentSongTime <= n.endTime
+      );
+      if (activeGuideNote) {
+        const freq = 440 * Math.pow(2, (activeGuideNote.midi - 69) / 12);
+        setVocoderTargetFrequency(freq);
+      } else {
+        setVocoderTargetFrequency(0);
+      }
+    }
+  }, [currentSongTime, autoTuneOn, guideNotes, isListening, setVocoderTargetFrequency]);
+
+  // === Stop mic when no song or loading ===
+  useEffect(() => {
+    if (isListening && ((partyState && !partyState.currentSong) || isLoading)) {
+      stopListening();
+    }
+  }, [partyState, isLoading, isListening, stopListening]);
+
+  // === Draggable position ===
   const [micPos, setMicPos] = useState({ x: typeof window !== 'undefined' ? window.innerWidth - 176 : 16, y: 16 });
   const isDraggingMic = useRef(false);
   const dragStartPos = useRef({ x: 0, y: 0 });
@@ -114,7 +186,7 @@ export default function MicrophonePanel({ isListening, startListening, stopListe
               min={0} 
               max={1} 
               step={0.01}
-              defaultValue={0.8}
+              value={micVolume}
               onChange={(e) => setMicVolume(parseFloat(e.target.value))}
               disabled={!isListening}
               style={{ flex: 1, accentColor: 'var(--secondary-accent)', height: '4px', cursor: isListening ? 'pointer' : 'not-allowed', opacity: isListening ? 1 : 0.4 }}

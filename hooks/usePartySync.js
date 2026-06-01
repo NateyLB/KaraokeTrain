@@ -80,14 +80,9 @@ export function usePartySync(roomId, role, callbacks = {}) {
               if (s.autoTuneOn !== undefined) st.setAutoTuneOn(s.autoTuneOn);
               if (s.isVideoVisible !== undefined) st.setIsVideoVisible(s.isVideoVisible);
 
-              // Mic: on host, call start/stopListening; on remote, just set state
+              // Mic: set store state — MicrophonePanel reacts to store changes
               if (s.micEnabled !== undefined) {
-                if (role === 'host') {
-                  if (s.micEnabled && callbacksRef.current.onStartListening) callbacksRef.current.onStartListening();
-                  else if (!s.micEnabled && callbacksRef.current.onStopListening) callbacksRef.current.onStopListening();
-                } else {
-                  st.setMicEnabled(s.micEnabled);
-                }
+                st.setMicEnabled(s.micEnabled);
               }
               if (s.micVolume !== undefined) st.setMicVolume(s.micVolume);
 

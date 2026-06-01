@@ -2,8 +2,19 @@
 import { Music, X, Play, ChevronUp, ChevronDown, Trash2 } from 'lucide-react';
 import useKaraokeStore from '../store/useKaraokeStore';
 
-export default function SongQueue({ roomId, onPlayNow }) {
-  const { partyState, isQueueOpen, setIsQueueOpen } = useKaraokeStore();
+export default function SongQueue({ roomId }) {
+  const { partyState, setPartyState, isQueueOpen, setIsQueueOpen } = useKaraokeStore();
+
+  const handlePlayNow = async (index) => {
+    try {
+      const res = await fetch('/api/party', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'playNow', id: roomId, index })
+      });
+      if (res.ok) setPartyState(await res.json());
+    } catch (err) { console.error(err); }
+  };
 
   const handleRemoveSong = async (index) => {
     await fetch('/api/party', {
@@ -62,8 +73,8 @@ export default function SongQueue({ roomId, onPlayNow }) {
                          )}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                         {onPlayNow && qSong.jobStatus?.status === 'ready' && (
-                           <button onClick={() => onPlayNow(i)} style={{ background: 'none', border: 'none', color: '#4ade80', cursor: 'pointer', padding: '0.25rem', marginRight: '0.25rem' }} title="Play Now">
+                         {qSong.jobStatus?.status === 'ready' && (
+                           <button onClick={() => handlePlayNow(i)} style={{ background: 'none', border: 'none', color: '#4ade80', cursor: 'pointer', padding: '0.25rem', marginRight: '0.25rem' }} title="Play Now">
                                <Play size={18} />
                            </button>
                          )}

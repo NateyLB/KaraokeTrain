@@ -6,7 +6,8 @@ export default function RemoteControls({ roomId }) {
   const { 
     isPlaying, setIsPlaying, vocalsEnabled, setVocalsEnabled, vocalsVolume, setVocalsVolume,
     lyricsOffset, setLyricsOffset, micEnabled, setMicEnabled, micVolume, setMicVolume,
-    echoOn, setEchoOn, autoTuneOn, setAutoTuneOn, isVideoVisible, setIsVideoVisible
+    echoOn, setEchoOn, autoTuneOn, setAutoTuneOn, isVideoVisible, setIsVideoVisible,
+    parsedLyrics
   } = useKaraokeStore();
 
   const handleNextSong = async () => {
@@ -92,7 +93,11 @@ export default function RemoteControls({ roomId }) {
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <button onClick={() => setLyricsOffset(o => Math.round(((Number(o) || 0) - 0.5) * 100) / 100)} style={{ color: 'white', padding: '0.2rem 0.5rem', fontWeight: 'bold', background: 'transparent', border: 'none', cursor: 'pointer' }}>-</button>
-                    <span style={{ fontSize: '0.9rem', color: 'white', minWidth: '2rem', textAlign: 'center' }}>{(Number(lyricsOffset) || 0).toFixed(1)}s</span>
+                    {(() => {
+                        const firstValidTime = (parsedLyrics?.find(l => l.text.trim().length > 0) || parsedLyrics?.[0])?.time || 0;
+                        const displayTime = ((Number(lyricsOffset) || 0) + firstValidTime).toFixed(1);
+                        return <span style={{ fontSize: '0.9rem', color: 'white', minWidth: '2rem', textAlign: 'center' }}>{displayTime}s</span>;
+                    })()}
                     <button onClick={() => setLyricsOffset(o => Math.round(((Number(o) || 0) + 0.5) * 100) / 100)} style={{ color: 'white', padding: '0.2rem 0.5rem', fontWeight: 'bold', background: 'transparent', border: 'none', cursor: 'pointer' }}>+</button>
                 </div>
             </div>
