@@ -105,7 +105,12 @@ export default function SearchBar({ onSelect }) {
               cursor: 'pointer',
               transition: 'background 0.2s ease',
             }}
-            onClick={() => onSelect(track)}
+            onClick={() => {
+              onSelect(track);
+              setQuery('');
+              setResults([]);
+              setHasSearched(false);
+            }}
             onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.07)'}
             onMouseLeave={e => e.currentTarget.style.background = ''}
           >

@@ -14,6 +14,19 @@ echo "🚀 Building and pushing Docker image using Google Cloud Build..."
 gcloud builds submit --tag $IMAGE_NAME .
 
 # (No longer exporting .env.local to the shell to protect secrets)
+
+echo "🔐 Granting Secret Manager permissions to Cloud Run service account..."
+PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format="value(projectNumber)")
+SERVICE_ACCOUNT="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+
+gcloud secrets add-iam-policy-binding YOUTUBE_API_KEY \
+  --member="serviceAccount:${SERVICE_ACCOUNT}" \
+  --role="roles/secretmanager.secretAccessor"
+
+gcloud secrets add-iam-policy-binding DOWNLOADER_SECRET \
+  --member="serviceAccount:${SERVICE_ACCOUNT}" \
+  --role="roles/secretmanager.secretAccessor"
+
 echo "🚢 Deploying to Cloud Run..."
 gcloud run deploy $SERVICE_NAME \
   --image $IMAGE_NAME \
