@@ -50,21 +50,28 @@ export function useAudioPlayback(roomId) {
       isPlayingRef.current = false;
     } else {
       // PLAY — apply vocal settings first to the web audio nodes
-      if (webAudioNodesRef.current) {
+      if (webAudioNodesRef.current && window.__karaokeAudioCtx) {
+        // Must resume AudioContext synchronously inside user gesture for mobile Safari/Chrome
+        if (window.__karaokeAudioCtx.state === 'suspended') {
+          window.__karaokeAudioCtx.resume();
+        }
         const { vocalGain } = webAudioNodesRef.current;
-        vocalGain.gain.setTargetAtTime(vocalsEnabled ? vocalsVolume : 0, window.__karaokeAudioCtx?.currentTime || 0, 0.05);
+        vocalGain.gain.setTargetAtTime(vocalsEnabled ? vocalsVolume : 0, window.__karaokeAudioCtx.currentTime || 0, 0.05);
       }
 
       setIsPlaying(true);
       isPlayingRef.current = true;
 
-      if (ytPlayerRef.current) {
-        ytPlayerRef.current.playVideo();
-      } else {
+      // Always play the audio element synchronously to unlock it on mobile browsers.
+      // If YouTube buffers, the buffering callback will pause it temporarily.
       if (audioRefs.current['multiplex']) {
         audioRefs.current['multiplex'].play().catch(e => console.error('Play prevented', e));
       }
+
+      if (ytPlayerRef.current) {
+        ytPlayerRef.current.playVideo();
       }
+      
       startTimeUpdates();
     }
   }, [startTimeUpdates]);
@@ -147,9 +154,10 @@ export function useAudioPlayback(roomId) {
       }
       const ctx = window.__karaokeAudioCtx;
 
-      // Resume context if suspended
+      // Resume context if suspended (Note: on mobile this might be ignored if not in user gesture,
+      // but togglePlay will catch it and resume it properly).
       if (ctx.state === 'suspended') {
-        ctx.resume();
+        ctx.resume().catch(() => {});
       }
 
       // If we haven't wired up this specific audio element yet...
