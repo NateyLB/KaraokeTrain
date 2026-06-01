@@ -100,7 +100,7 @@ export function useAudioAnalyzer() {
   // Smooth pitch with a small history buffer to reduce jitter
   const pitchHistoryRef = useRef([]);
 
-  const startListening = async () => {
+  const startListening = async (echoCancellation = true) => {
     try {
       // Prevent double-start leaks
       if (streamRef.current) return;
@@ -108,9 +108,9 @@ export function useAudioAnalyzer() {
       
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false,
+          echoCancellation: echoCancellation,
+          noiseSuppression: echoCancellation,
+          autoGainControl: echoCancellation,
         },
       });
       
@@ -271,6 +271,33 @@ export function useAudioAnalyzer() {
     }
   };
 
+  
+  const setEchoCancellation = async (echoCancellation) => {
+    if (!isListening) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: echoCancellation,
+          noiseSuppression: echoCancellation,
+          autoGainControl: echoCancellation,
+        },
+      });
+      if (streamRef.current && streamRef.current !== 'pending') {
+        streamRef.current.getTracks().forEach(t => t.stop());
+      }
+      streamRef.current = stream;
+      
+      if (sourceRef.current) {
+        sourceRef.current.disconnect();
+      }
+      sourceRef.current = audioContextRef.current.createMediaStreamSource(stream);
+      sourceRef.current.connect(analyzerRef.current);
+      sourceRef.current.connect(gainNodeRef.current);
+    } catch (err) {
+      console.error("Failed to update echo cancellation stream", err);
+    }
+  };
+
   useEffect(() => {
     isMounted.current = true;
     return () => {
@@ -279,5 +306,5 @@ export function useAudioAnalyzer() {
     };
   }, []);
 
-  return { isListening, volume, pitch, startListening, stopListening, setMicVolume, setEchoEnabled, setVocoderTargetFrequency, error };
+  return { isListening, volume, pitch, startListening, stopListening, setMicVolume, setEchoEnabled, setVocoderTargetFrequency, setEchoCancellation, error };
 }

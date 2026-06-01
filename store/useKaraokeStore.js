@@ -18,6 +18,7 @@ const useKaraokeStore = create((set, get) => ({
   micVolume: 1.0,
   echoOn: false,
   autoTuneOn: false,
+  echoCancellationOn: true,
   isVideoVisible: false,
 
   setIsPlaying: (v) => set({ isPlaying: v }),
@@ -29,6 +30,7 @@ const useKaraokeStore = create((set, get) => ({
   setMicVolume: (v) => set({ micVolume: v }),
   setEchoOn: (v) => set({ echoOn: v }),
   setAutoTuneOn: (v) => set({ autoTuneOn: v }),
+  setEchoCancellationOn: (v) => set({ echoCancellationOn: v }),
   setIsVideoVisible: (v) => set({ isVideoVisible: v }),
 
   // Helper to get all synced settings as an object
@@ -44,6 +46,7 @@ const useKaraokeStore = create((set, get) => ({
       micVolume: s.micVolume,
       echoOn: s.echoOn,
       autoTuneOn: s.autoTuneOn,
+      echoCancellationOn: s.echoCancellationOn,
       isVideoVisible: s.isVideoVisible,
     };
   },

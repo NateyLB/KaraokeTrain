@@ -13,6 +13,7 @@ export default function MicrophonePanel() {
   const {
     vocalsEnabled, vocalsVolume, setVocalsVolume,
     echoOn, setEchoOn, autoTuneOn, setAutoTuneOn,
+    echoCancellationOn, setEchoCancellationOn,
     isMicExpanded, setIsMicExpanded,
     currentSongTime, guideNotes, partyState, isLoading,
     micVolume, setMicVolume
@@ -22,7 +23,7 @@ export default function MicrophonePanel() {
   const {
     isListening, pitch,
     startListening, stopListening, setMicVolume: applyMicGain,
-    setEchoEnabled, setVocoderTargetFrequency,
+    setEchoEnabled, setVocoderTargetFrequency, setEchoCancellation,
     error: micError,
   } = useAudioAnalyzer();
 
@@ -40,16 +41,24 @@ export default function MicrophonePanel() {
   const storeMicEnabled = useKaraokeStore(s => s.micEnabled);
   useEffect(() => {
     if (storeMicEnabled && !isListening) {
-      startListening();
+      startListening(echoCancellationOn);
     } else if (!storeMicEnabled && isListening) {
       stopListening();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeMicEnabled]);
+
+  // === Dynamic Echo Cancellation update ===
+  useEffect(() => {
+    setEchoCancellation(echoCancellationOn);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [echoCancellationOn]);
 
   // === Echo sync ===
   useEffect(() => {
     setEchoEnabled(echoOn);
-  }, [echoOn, setEchoEnabled]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [echoOn]);
 
   // === AutoTune target pitch ===
   useEffect(() => {
@@ -59,7 +68,7 @@ export default function MicrophonePanel() {
     }
     if (guideNotes) {
       const activeGuideNote = guideNotes.find(
-        n => currentSongTime >= n.startTime && currentSongTime <= n.endTime
+        (n) => currentSongTime >= n.startTime && currentSongTime <= n.endTime
       );
       if (activeGuideNote) {
         const freq = 440 * Math.pow(2, (activeGuideNote.midi - 69) / 12);
@@ -68,7 +77,8 @@ export default function MicrophonePanel() {
         setVocoderTargetFrequency(0);
       }
     }
-  }, [currentSongTime, autoTuneOn, guideNotes, isListening, setVocoderTargetFrequency]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoTuneOn, isListening, guideNotes, currentSongTime]);
 
   // === Stop mic when no song or loading ===
   useEffect(() => {
@@ -144,7 +154,7 @@ export default function MicrophonePanel() {
                        <button
                          onClick={(e) => {
                              e.stopPropagation();
-                             isListening ? stopListening() : startListening();
+                             isListening ? stopListening() : startListening(echoCancellationOn);
                          }}
                          title="Toggle Microphone"
                          style={{
@@ -238,9 +248,24 @@ export default function MicrophonePanel() {
           >
             <Sparkles size={14} /> AutoTune
           </button>
+          <button
+            onClick={() => setEchoCancellationOn(!echoCancellationOn)}
+            disabled={!isListening}
+            style={{
+              flex: 1,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem',
+              background: echoCancellationOn ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255,255,255,0.05)',
+              border: `1px solid ${echoCancellationOn ? '#3b82f6' : 'var(--glass-border)'}`,
+              color: echoCancellationOn ? '#3b82f6' : 'var(--text-muted)',
+              padding: '0.5rem', borderRadius: '0.5rem', fontSize: '0.8rem', cursor: isListening ? 'pointer' : 'not-allowed', transition: 'all 0.2s',
+              opacity: isListening ? 1 : 0.4
+            }}
+          >
+            <AlertCircle size={14} /> Noise Cancel
+          </button>
         </div>
 
-        {isListening && (
+        {isListening && !echoCancellationOn && (
           <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', textAlign: 'center', marginTop: '0.2rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem' }}>
             <AlertCircle size={12} /> Headphones required to prevent feedback
           </p>
