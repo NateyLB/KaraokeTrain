@@ -240,6 +240,12 @@ export default function MicrophonePanel() {
           </button>
         </div>
 
+        {isListening && (
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', textAlign: 'center', marginTop: '0.2rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem' }}>
+            <AlertCircle size={12} /> Headphones required to prevent feedback
+          </p>
+        )}
+
         {micError && (
           <p style={{ color: '#ef4444', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.5rem' }}>
             <AlertCircle size={14} /> {micError}

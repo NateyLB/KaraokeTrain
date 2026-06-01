@@ -71,6 +71,8 @@ export async function GET(request) {
     const chunksize = end - start + 1;
     const streamOptions = { start, end };
     
+    const contentType = stem === 'multiplex' ? 'audio/mp4' : 'audio/wav';
+    
     // In local mode, create ReadStream directly
     const finalStream = require('fs').createReadStream(fileData.stream.path, streamOptions);
 
@@ -80,15 +82,16 @@ export async function GET(request) {
         'Content-Range': `bytes ${start}-${end}/${fileSize}`,
         'Accept-Ranges': 'bytes',
         'Content-Length': chunksize.toString(),
-        'Content-Type': 'audio/wav',
+        'Content-Type': contentType,
       },
     });
   } else {
+    const contentType = stem === 'multiplex' ? 'audio/mp4' : 'audio/wav';
     return new Response(nodeToWebStream(fileData.stream), {
       status: 200,
       headers: {
         'Content-Length': fileSize.toString(),
-        'Content-Type': 'audio/wav',
+        'Content-Type': contentType,
       },
     });
   }

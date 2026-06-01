@@ -108,7 +108,7 @@ export function useAudioAnalyzer() {
       
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          echoCancellation: true,
+          echoCancellation: false,
           noiseSuppression: false,
           autoGainControl: false,
         },

@@ -6,7 +6,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { Readable } from 'stream';
 import { jobQueue } from '../../../../lib/jobQueue';
-import { uploadDirectory, checkCache, uploadJson } from '../../../../lib/storage';
+import { uploadFile, uploadDirectory, checkCache, uploadJson } from '../../../../lib/storage';
 import { isValidVideoId } from '../../../../lib/validators';
 import { canStartJob, startJob, finishJob, checkRateLimit, getClientIp } from '../../../../lib/rateLimiter';
 
@@ -65,7 +65,7 @@ export async function POST(request) {
       console.error("Background separation error:", err);
       const existing = jobQueue.get(videoId);
       if (existing?.status !== 'error') {
-        jobQueue.update(videoId, { status: 'error', error: 'Processing failed. Please try again.' });
+        jobQueue.update(videoId, { status: 'error', error: err.message || 'Processing failed. Please try again.' });
       }
     });
 
@@ -177,8 +177,13 @@ export async function runBackgroundSeparation(song, jobId, uploadDir, baseUrl = 
     await new Promise((resolve, reject) => {
       // Spawn demucs using the python path from env, or fallback to the local venv
       const pythonPath = process.env.PYTHON_BIN_PATH || 'python3';
+      // Auto-detect local virtual environment for better developer experience
+      const venvPythonPath = path.join(process.cwd(), 'venv', 'bin', 'python3');
+      const pythonExec = fs.existsSync(venvPythonPath) ? venvPythonPath : pythonPath;
+      
       const cmdArgs = ['-m', 'demucs', '--out', uploadDir, '--two-stems', 'vocals', inputPath];
-      const demucsProcess = spawn(pythonPath, cmdArgs);
+      
+      const demucsProcess = spawn(pythonExec, cmdArgs);
 
       let outputLines = [];
 
@@ -228,10 +233,40 @@ export async function runBackgroundSeparation(song, jobId, uploadDir, baseUrl = 
          reject(err);
       });
     });
+
+    // --- 2.5. Multiplex into single stereo file ---
+    jobQueue.update(jobId, { message: 'Multiplexing audio streams (syncing)...' });
+    const htdemucsDir = path.join(uploadDir, 'htdemucs', 'input');
+    const vocalsWav = path.join(htdemucsDir, 'vocals.wav');
+    const noVocalsWav = path.join(htdemucsDir, 'no_vocals.wav');
+    const multiplexM4a = path.join(uploadDir, 'multiplex.m4a');
+
+    await new Promise((resolve, reject) => {
+      // Left channel = noVocals (Instrumental), Right channel = vocals
+      const ffmpegArgs = [
+        '-y',
+        '-i', noVocalsWav,
+        '-i', vocalsWav,
+        '-filter_complex', '[0:a]pan=1c|c0=0.5*c0+0.5*c1[m0]; [1:a]pan=1c|c0=0.5*c0+0.5*c1[m1]; [m0][m1]amerge=inputs=2[a]',
+        '-map', '[a]',
+        '-c:a', 'aac',
+        '-b:a', '256k',
+        multiplexM4a
+      ];
+      
+      const ffmpeg = spawn('ffmpeg', ffmpegArgs);
+      let stderr = '';
+      ffmpeg.stderr.on('data', (d) => stderr += d.toString());
+      ffmpeg.on('close', (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`FFmpeg failed with code ${code}. Error: ${stderr}`));
+      });
+      ffmpeg.on('error', reject);
+    });
     
-    jobQueue.update(jobId, { message: 'Uploading stems to Cloud Storage...' });
+    jobQueue.update(jobId, { message: 'Uploading multiplexed track to Cloud Storage...' });
     try {
-        await uploadDirectory(path.join(uploadDir, 'htdemucs', 'input'), `processedSongs/${jobId}`);
+        await uploadFile(multiplexM4a, `processedSongs/${jobId}/multiplex.m4a`);
     } catch(e) {
         console.error("GCS Upload failed:", e);
     }
@@ -323,7 +358,8 @@ export async function runBackgroundSeparation(song, jobId, uploadDir, baseUrl = 
     }, 30 * 60 * 1000);
 
   } catch (err) {
-    jobQueue.update(jobId, { status: 'error', error: 'Processing failed. Please try again.' });
+    console.error("Pipeline Error:", err);
+    jobQueue.update(jobId, { status: 'error', error: err.message || 'Processing failed. Please try again.' });
     throw err;
   } finally {
     finishJob();

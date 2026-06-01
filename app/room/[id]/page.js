@@ -134,20 +134,17 @@ export default function RoomPage({ params }) {
 
       <NowPlayingHeader song={song} onBack={() => router.push('/')} />
 
-      {/* Hidden audio elements */}
+      {/* Hidden audio element (Multiplex Stereo) */}
       <div style={{ display: 'none' }}>
-        {stems && ['vocals', 'no_vocals'].map(stem => (
-          stems[stem] && (
-            <audio
-              key={stem}
-              ref={el => audioRefs.current[stem] = el}
-              src={stems[stem]}
-              preload="auto"
-              crossOrigin="anonymous"
-              onLoadedMetadata={(e) => { if (stem === 'no_vocals') setDuration(e.target.duration); }}
-            />
-          )
-        ))}
+        {stems?.multiplex && (
+          <audio
+            ref={el => audioRefs.current['multiplex'] = el}
+            src={stems.multiplex}
+            preload="auto"
+            crossOrigin="anonymous"
+            onLoadedMetadata={(e) => setDuration(e.target.duration)}
+          />
+        )}
       </div>
 
       <PlayerControls onTogglePlay={togglePlay} onNextSong={handleNextSong} onSeek={handleSeek} />

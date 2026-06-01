@@ -58,11 +58,10 @@ export function useSongLoader(roomId) {
         return { url: URL.createObjectURL(blob) };
       };
 
-      Promise.all([fetchStem('vocals'), fetchStem('no_vocals')])
-        .then(([vocalsData, noVocalsData]) => {
+      fetchStem('multiplex')
+        .then((multiplexData) => {
           prefetchedBlobs.current[readySong.jobId] = {
-            vocals: vocalsData.url,
-            no_vocals: noVocalsData.url,
+            multiplex: multiplexData.url,
           };
           console.log(`Prefetched ${readySong.jobId} successfully!`);
         })
@@ -125,12 +124,10 @@ export function useSongLoader(roomId) {
       if (setupJobIdRef.current !== song.jobId) return;
 
       // 2. Fetch Audio Stems
-      let vocalsData = null;
-      let noVocalsData = null;
+      let multiplexData = null;
 
       if (prefetchedBlobs.current[song.jobId]) {
-        vocalsData = { url: prefetchedBlobs.current[song.jobId].vocals };
-        noVocalsData = { url: prefetchedBlobs.current[song.jobId].no_vocals };
+        multiplexData = { url: prefetchedBlobs.current[song.jobId].multiplex };
       } else {
         useKaraokeStore
           .getState()
@@ -141,16 +138,13 @@ export function useSongLoader(roomId) {
           const blob = await res.blob();
           return { url: URL.createObjectURL(blob) };
         };
-        [vocalsData, noVocalsData] = await Promise.all([
-          fetchStem('vocals'),
-          fetchStem('no_vocals'),
-        ]);
+        multiplexData = await fetchStem('multiplex');
       }
 
       if (setupJobIdRef.current !== song.jobId) return;
 
       const store = useKaraokeStore.getState();
-      store.setStems({ vocals: vocalsData.url, no_vocals: noVocalsData.url });
+      store.setStems({ multiplex: multiplexData.url });
 
       // 3. Set Lyrics
       if (backgroundLyrics) {

@@ -14,7 +14,7 @@ import useKaraokeStore from '../store/useKaraokeStore';
  *            handleYouTubeStateChange, audioRefs, ytPlayerRef }
  */
 export function useAudioPlayback(roomId) {
-  const audioRefs = useRef({ vocals: null, no_vocals: null });
+  const audioRefs = useRef({ multiplex: null });
   const ytPlayerRef = useRef(null);
   const timeUpdateInterval = useRef(null);
   const isPlayingRef = useRef(false);
@@ -24,7 +24,7 @@ export function useAudioPlayback(roomId) {
   const startTimeUpdates = useCallback(() => {
     clearInterval(timeUpdateInterval.current);
     timeUpdateInterval.current = setInterval(() => {
-      const leader = audioRefs.current['no_vocals'];
+      const leader = audioRefs.current['multiplex'];
       if (!leader) return;
       const current = leader.currentTime;
       useKaraokeStore.getState().setCurrentSongTime(current);
@@ -49,10 +49,10 @@ export function useAudioPlayback(roomId) {
       setIsPlaying(false);
       isPlayingRef.current = false;
     } else {
-      // PLAY — apply vocal settings first
-      if (audioRefs.current['vocals']) {
-        audioRefs.current['vocals'].muted = !vocalsEnabled;
-        audioRefs.current['vocals'].volume = vocalsVolume;
+      // PLAY — apply vocal settings first to the web audio nodes
+      if (webAudioNodesRef.current) {
+        const { vocalGain } = webAudioNodesRef.current;
+        vocalGain.gain.setTargetAtTime(vocalsEnabled ? vocalsVolume : 0, window.__karaokeAudioCtx?.currentTime || 0, 0.05);
       }
 
       setIsPlaying(true);
@@ -61,9 +61,9 @@ export function useAudioPlayback(roomId) {
       if (ytPlayerRef.current) {
         ytPlayerRef.current.playVideo();
       } else {
-        ['vocals', 'no_vocals'].forEach(k => {
-          audioRefs.current[k]?.play().catch(e => console.error('Play prevented', e));
-        });
+      if (audioRefs.current['multiplex']) {
+        audioRefs.current['multiplex'].play().catch(e => console.error('Play prevented', e));
+      }
       }
       startTimeUpdates();
     }
@@ -105,82 +105,104 @@ export function useAudioPlayback(roomId) {
       // PLAYING
       setIsPlaying(true);
       isPlayingRef.current = true;
-      ['vocals', 'no_vocals'].forEach(k => {
-        if (audioRefs.current[k]?.paused) {
-          audioRefs.current[k].play().catch(e => console.error('Play prevented', e));
-        }
-      });
+      if (audioRefs.current['multiplex']?.paused) {
+        audioRefs.current['multiplex'].play().catch(e => console.error('Play prevented', e));
+      }
       startTimeUpdates();
     } else if (event.data === 2) {
       // PAUSED
       setIsPlaying(false);
       isPlayingRef.current = false;
       clearInterval(timeUpdateInterval.current);
-      ['vocals', 'no_vocals'].forEach(k => {
-        if (audioRefs.current[k] && !audioRefs.current[k].paused) audioRefs.current[k].pause();
-      });
+      if (audioRefs.current['multiplex'] && !audioRefs.current['multiplex'].paused) {
+        audioRefs.current['multiplex'].pause();
+      }
     } else if (event.data === 3) {
       // BUFFERING — pause stems to stay in sync
-      ['vocals', 'no_vocals'].forEach(k => {
-        if (audioRefs.current[k] && !audioRefs.current[k].paused) audioRefs.current[k].pause();
-      });
+      if (audioRefs.current['multiplex'] && !audioRefs.current['multiplex'].paused) {
+        audioRefs.current['multiplex'].pause();
+      }
     }
   }, [startTimeUpdates]);
 
   // ---- internal effects ----
 
   // Vocals volume / mute sync
-  const vocalsEnabled = useKaraokeStore(s => s.vocalsEnabled);
-  const vocalsVolume = useKaraokeStore(s => s.vocalsVolume);
-  useEffect(() => {
-    if (audioRefs.current['vocals']) {
-      audioRefs.current['vocals'].muted = !vocalsEnabled;
-      audioRefs.current['vocals'].volume = vocalsVolume;
-    }
-  }, [vocalsEnabled, vocalsVolume]);
-
-  // Strict audio sync (leader/follower drift correction)
+  // Strict audio sync (no longer needed because it's multiplexed in a single file!)
+  // However, we DO need to set up the Web Audio API routing for the multiplexed file.
   const stems = useKaraokeStore(s => s.stems);
   const isPlaying = useKaraokeStore(s => s.isPlaying);
+  const webAudioNodesRef = useRef(null);
+
   useEffect(() => {
-    const leader = audioRefs.current['no_vocals'];
-    const follower = audioRefs.current['vocals'];
-    if (!leader || !follower) return;
+    const audioEl = audioRefs.current['multiplex'];
+    if (!audioEl) return;
 
-    let syncing = false;
-
-    const onTimeUpdate = () => {
-      if (syncing) return;
-      const diff = leader.currentTime - follower.currentTime;
-      const abs = Math.abs(diff);
-      if (abs > 0.5) {
-        syncing = true;
-        follower.currentTime = leader.currentTime;
-        follower.playbackRate = 1.0;
-        setTimeout(() => { syncing = false; }, 50);
-      } else if (abs > 0.1) {
-        follower.playbackRate = diff > 0 ? 1.05 : 0.95;
-      } else if (follower.playbackRate !== 1.0) {
-        follower.playbackRate = 1.0;
+    // We must initialize Web Audio only after user interaction, or rely on browser autoplay policies
+    // Luckily, the user has to click a song to get here!
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!window.__karaokeAudioCtx) {
+        window.__karaokeAudioCtx = new AudioContext();
       }
-    };
+      const ctx = window.__karaokeAudioCtx;
 
-    const onWaiting = () => follower.pause();
-    const onPlaying = () => { if (isPlaying) follower.play().catch(() => {}); };
-    const onPause = () => { if (leader.paused) follower.pause(); };
+      // Resume context if suspended
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
 
-    leader.addEventListener('timeupdate', onTimeUpdate);
-    leader.addEventListener('waiting', onWaiting);
-    leader.addEventListener('playing', onPlaying);
-    leader.addEventListener('pause', onPause);
+      // If we haven't wired up this specific audio element yet...
+      if (!audioEl.__webAudioConnected) {
+        audioEl.__webAudioConnected = true;
 
-    return () => {
-      leader.removeEventListener('timeupdate', onTimeUpdate);
-      leader.removeEventListener('waiting', onWaiting);
-      leader.removeEventListener('playing', onPlaying);
-      leader.removeEventListener('pause', onPause);
-    };
-  }, [stems, isPlaying]);
+        const source = ctx.createMediaElementSource(audioEl);
+        
+        // 1. Split the stereo stream into L (0) and R (1)
+        const splitter = ctx.createChannelSplitter(2);
+        source.connect(splitter);
+
+        // 2. Create independent volume controls (Gain Nodes)
+        const instrGain = ctx.createGain();
+        const vocalGain = ctx.createGain();
+
+        // 3. Create a Merger to put them back together. 
+        // We want both L and R to play out of BOTH speakers (downmix to mono)
+        const merger = ctx.createChannelMerger(2);
+
+        // Route Instrumental (Left Channel, 0) to both L and R outputs
+        splitter.connect(instrGain, 0);
+        instrGain.connect(merger, 0, 0); // L
+        instrGain.connect(merger, 0, 1); // R
+
+        // Route Vocals (Right Channel, 1) to both L and R outputs
+        splitter.connect(vocalGain, 1);
+        vocalGain.connect(merger, 0, 0); // L
+        vocalGain.connect(merger, 0, 1); // R
+
+        // Send to speakers
+        merger.connect(ctx.destination);
+
+        webAudioNodesRef.current = { instrGain, vocalGain };
+      }
+    } catch (e) {
+      console.error("Web Audio API failed to initialize:", e);
+    }
+    
+    // Clean up function if we want to disconnect, but we can reuse the connection for the lifetime of the audio element
+    return () => {};
+  }, [stems]);
+
+  // Sync vocal settings to the Gain Node instead of the raw audio element
+  const vocalsEnabled = useKaraokeStore(s => s.vocalsEnabled);
+  const vocalsVolume = useKaraokeStore(s => s.vocalsVolume);
+  
+  useEffect(() => {
+    if (webAudioNodesRef.current) {
+      const { vocalGain } = webAudioNodesRef.current;
+      vocalGain.gain.setTargetAtTime(vocalsEnabled ? vocalsVolume : 0, window.__karaokeAudioCtx.currentTime, 0.05);
+    }
+  }, [vocalsEnabled, vocalsVolume]);
 
   return {
     togglePlay,
