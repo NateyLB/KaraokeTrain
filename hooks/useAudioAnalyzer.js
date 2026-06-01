@@ -122,7 +122,7 @@ export function useAudioAnalyzer() {
       streamRef.current = stream;
 
       const AudioContext = window.AudioContext || window.webkitAudioContext;
-      audioContextRef.current = new AudioContext();
+      audioContextRef.current = new AudioContext({ latencyHint: 'interactive' });
       analyzerRef.current = audioContextRef.current.createAnalyser();
       analyzerRef.current.fftSize = 2048;
       analyzerRef.current.smoothingTimeConstant = 0;

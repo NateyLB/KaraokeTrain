@@ -150,7 +150,7 @@ export function useAudioPlayback(roomId) {
     try {
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       if (!window.__karaokeAudioCtx) {
-        window.__karaokeAudioCtx = new AudioContext();
+        window.__karaokeAudioCtx = new AudioContext({ latencyHint: 'interactive' });
       }
       const ctx = window.__karaokeAudioCtx;
 
