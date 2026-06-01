@@ -45,3 +45,4 @@ uploads/
 testout/
 *.m4a
 
+venv/
