@@ -188,7 +188,11 @@ export function useSongLoader(roomId) {
       const aiRes = await fetch('/api/lyrics/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId: song.jobId, plainLyrics: plainText }),
+        body: JSON.stringify({ 
+          jobId: song.jobId, 
+          plainLyrics: plainText,
+          syncedLyrics: data.lyrics?.syncedLyrics || null 
+        }),
       });
       if (setupJobIdRef.current !== song.jobId) return;
       const aiData = await aiRes.json();

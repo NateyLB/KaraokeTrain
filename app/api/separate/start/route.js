@@ -282,19 +282,12 @@ export async function runBackgroundSeparation(song, jobId, uploadDir, baseUrl = 
        // We import fetchLyrics here to avoid circular dependencies at the top level
        const { fetchLyrics } = await import('../../../../lib/lyrics.js');
        
-       // Replicate the cleanup logic from the room route
-       let t = song.title.replace(/\([^)]+\)/g, '').replace(/\[[^\]]+\]/g, '');
-       t = t.replace(/-?\s*Live at.*$/i, '').replace(/-?\s*Live(?!.*-).*$/i, '');
-       let a = song.artist.replace(/VEVO$/i, '').replace(/Official$/i, '').replace(/Topic$/i, '').trim();
-       if (t.includes('-')) {
-         const parts = t.split('-');
-         a = parts[0].trim();
-         t = parts[1].trim();
+       // LRCLIB search handles its own cascade of raw vs cleaned titles now
+       try {
+         fetchedLyricsData = await fetchLyrics(song.title, song.artist);
+       } catch (err) {
+         console.error('Initial LRCLIB search error:', err);
        }
-       t = t.trim();
-       a = a.trim();
-       
-       fetchedLyricsData = await fetchLyrics(t, a);
        
        if (fetchedLyricsData) {
            if (fetchedLyricsData.syncedLyrics) {

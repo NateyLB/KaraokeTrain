@@ -1,6 +1,27 @@
-'use client';
 import { useRef, useEffect, useCallback } from 'react';
 import useKaraokeStore from '../store/useKaraokeStore';
+
+const safePlay = (audio) => {
+  if (!audio) return;
+  const promise = audio.play();
+  if (promise !== undefined) {
+    audio.__playPromise = promise;
+    promise.catch(e => {
+      if (e.name !== 'AbortError') console.warn('Audio play error:', e);
+    });
+  }
+};
+
+const safePause = (audio) => {
+  if (!audio) return;
+  if (audio.__playPromise !== undefined) {
+    audio.__playPromise.then(() => {
+      audio.pause();
+    }).catch(() => {});
+  } else {
+    audio.pause();
+  }
+};
 
 /**
  * Owns all audio playback state that is imperative / ref-based:
@@ -43,8 +64,10 @@ export function useAudioPlayback(roomId) {
 
     if (isPlaying) {
       // PAUSE
-      Object.values(audioRefs.current).forEach(a => a?.pause());
-      if (ytPlayerRef.current) ytPlayerRef.current.pauseVideo();
+      Object.values(audioRefs.current).forEach(safePause);
+      if (ytPlayerRef.current) {
+        try { ytPlayerRef.current.pauseVideo(); } catch(e) {}
+      }
       clearInterval(timeUpdateInterval.current);
       setIsPlaying(false);
       isPlayingRef.current = false;
@@ -64,12 +87,10 @@ export function useAudioPlayback(roomId) {
 
       // Always play the audio element synchronously to unlock it on mobile browsers.
       // If YouTube buffers, the buffering callback will pause it temporarily.
-      if (audioRefs.current['multiplex']) {
-        audioRefs.current['multiplex'].play().catch(e => console.error('Play prevented', e));
-      }
+      safePlay(audioRefs.current['multiplex']);
 
       if (ytPlayerRef.current) {
-        ytPlayerRef.current.playVideo();
+        try { ytPlayerRef.current.playVideo(); } catch(e) {}
       }
       
       startTimeUpdates();
@@ -78,7 +99,7 @@ export function useAudioPlayback(roomId) {
 
   const handleNextSong = useCallback(async () => {
     Object.values(audioRefs.current).forEach(a => {
-      if (a) { a.pause(); a.currentTime = 0; }
+      if (a) { safePause(a); a.currentTime = 0; }
     });
     clearInterval(timeUpdateInterval.current);
     useKaraokeStore.getState().resetForNewSong();
@@ -102,7 +123,9 @@ export function useAudioPlayback(roomId) {
   const handleSeek = useCallback((newTime) => {
     useKaraokeStore.getState().setCurrentSongTime(newTime);
     Object.values(audioRefs.current).forEach(a => { if (a) a.currentTime = newTime; });
-    if (ytPlayerRef.current) ytPlayerRef.current.seekTo(newTime, true);
+    if (ytPlayerRef.current) {
+      try { ytPlayerRef.current.seekTo(newTime, true); } catch(e) {}
+    }
   }, []);
 
   const handleYouTubeStateChange = useCallback((event) => {
@@ -113,7 +136,7 @@ export function useAudioPlayback(roomId) {
       setIsPlaying(true);
       isPlayingRef.current = true;
       if (audioRefs.current['multiplex']?.paused) {
-        audioRefs.current['multiplex'].play().catch(e => console.error('Play prevented', e));
+        safePlay(audioRefs.current['multiplex']);
       }
       startTimeUpdates();
     } else if (event.data === 2) {
@@ -122,12 +145,12 @@ export function useAudioPlayback(roomId) {
       isPlayingRef.current = false;
       clearInterval(timeUpdateInterval.current);
       if (audioRefs.current['multiplex'] && !audioRefs.current['multiplex'].paused) {
-        audioRefs.current['multiplex'].pause();
+        safePause(audioRefs.current['multiplex']);
       }
     } else if (event.data === 3) {
       // BUFFERING — pause stems to stay in sync
       if (audioRefs.current['multiplex'] && !audioRefs.current['multiplex'].paused) {
-        audioRefs.current['multiplex'].pause();
+        safePause(audioRefs.current['multiplex']);
       }
     }
   }, [startTimeUpdates]);

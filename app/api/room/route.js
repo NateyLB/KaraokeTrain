@@ -1,25 +1,7 @@
 import { fetchLyrics } from '../../../lib/lyrics';
 import { checkRateLimit, getClientIp } from '../../../lib/rateLimiter';
 
-function cleanMetadata(trackRaw, artistRaw) {
-  // Remove content inside brackets/parentheses like (Official Video), [Lyric Video]
-  let t = trackRaw.replace(/\([^)]+\)/g, '').replace(/\[[^\]]+\]/g, '');
-  
-  // Remove common fluff like "- Live at ..." or "Live"
-  t = t.replace(/-?\s*Live at.*$/i, '');
-  t = t.replace(/-?\s*Live(?!.*-).*$/i, '');
-
-  let a = artistRaw.replace(/VEVO$/i, '').replace(/Official$/i, '').replace(/Topic$/i, '').trim();
-
-  // If title has a hyphen, it's usually "Artist - Song"
-  if (t.includes('-')) {
-    const parts = t.split('-');
-    a = parts[0].trim();
-    t = parts[1].trim();
-  }
-
-  return { cleanTrack: t.trim(), cleanArtist: a.trim() };
-}
+// cleanMetadata removed - handled inside fetchLyrics
 
 export async function GET(request) {
   // Rate limit: max 30 lyrics lookups per minute per IP
@@ -37,11 +19,10 @@ export async function GET(request) {
     return Response.json({ error: 'Track and artist are required' }, { status: 400 });
   }
 
-  const { cleanTrack, cleanArtist } = cleanMetadata(trackRaw, artistRaw);
-  console.log(`Lyrics Search: "${cleanTrack}" by "${cleanArtist}"`);
+  console.log(`Lyrics Search: "${trackRaw}" by "${artistRaw}"`);
 
   try {
-    const lyrics = await fetchLyrics(cleanTrack, cleanArtist);
+    const lyrics = await fetchLyrics(trackRaw, artistRaw);
     return Response.json({ lyrics });
   } catch (error) {
     console.error('Lyrics fetch error:', error);

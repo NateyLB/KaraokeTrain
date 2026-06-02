@@ -26,9 +26,15 @@ export default function VideoPlayer({ videoId, ytPlayerRef, onStateChange }) {
           style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', borderRadius: '1rem', overflow: 'hidden', border: '1px solid var(--glass-border)', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}
           onReady={(event) => {
               ytPlayerRef.current = event.target;
-              event.target.mute();
-              if (isPlaying) {
+              try {
+                if (event?.target?.mute) {
+                  event.target.mute();
+                }
+                if (isPlaying && event?.target?.playVideo) {
                   event.target.playVideo();
+                }
+              } catch (e) {
+                console.warn('YouTube player onReady error (likely unmounted):', e);
               }
           }}
           onStateChange={onStateChange}

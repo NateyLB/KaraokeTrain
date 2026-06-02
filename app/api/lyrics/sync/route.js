@@ -17,13 +17,17 @@ export async function POST(request) {
 
   try {
     const body = await request.json();
-    const { jobId, plainLyrics } = body;
+    const { jobId, plainLyrics, syncedLyrics } = body;
 
     if (!jobId || !isValidJobId(jobId)) {
       return NextResponse.json({ error: 'A valid Job ID is required' }, { status: 400 });
     }
 
-    const result = await runWhisper(jobId, plainLyrics);
+    const lyricsPayload = syncedLyrics 
+      ? { syncedLyrics, plainLyrics } 
+      : plainLyrics;
+
+    const result = await runWhisper(jobId, lyricsPayload);
     
     // Cache the fallback results so we don't have to run Whisper again next time
     if (result && result.lyrics) {
