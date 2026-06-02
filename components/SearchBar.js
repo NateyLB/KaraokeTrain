@@ -1,13 +1,50 @@
 "use client";
 
 import { useState } from 'react';
-import { Search, Music2, ChevronRight, Music } from 'lucide-react';
+import { Search, Music2, ChevronRight, Music, Sparkles } from 'lucide-react';
+import useKaraokeStore from '../store/useKaraokeStore';
 
 export default function SearchBar({ onSelect }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [isAskingDJ, setIsAskingDJ] = useState(false);
+  const [djResponse, setDjResponse] = useState(null);
+
+  const askDJ = async (e) => {
+    e.preventDefault();
+    if (isAskingDJ) return;
+    
+    setIsAskingDJ(true);
+    setDjResponse(null);
+    setHasSearched(true);
+    setResults([]);
+    
+    try {
+      const state = useKaraokeStore.getState();
+      const res = await fetch('/api/dj', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: query,
+          history: state.partyHistory || [],
+          currentSong: state.currentSong,
+          queue: state.queue || []
+        })
+      });
+      const data = await res.json();
+      if (!data.error) {
+        setDjResponse(data);
+      } else {
+        console.error("DJ error:", data.error);
+      }
+    } catch (err) {
+      console.error('Ask DJ failed:', err);
+    } finally {
+      setIsAskingDJ(false);
+    }
+  };
 
   const handleSearch = async (e) => {
     e.preventDefault();
@@ -40,28 +77,46 @@ export default function SearchBar({ onSelect }) {
           <input
             type="text"
             className="input-field"
-            placeholder="Search YouTube for a song..."
+            placeholder="Search YouTube or Ask the DJ..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            style={{ paddingLeft: '3rem', paddingRight: '5rem' }}
+            style={{ paddingLeft: '3rem', paddingRight: '8.5rem' }}
             autoComplete="off"
           />
-          <button
-            type="submit"
-            className="btn-primary"
-            style={{
-              position: 'absolute',
-              right: '0.25rem',
-              top: '0.25rem',
-              bottom: '0.25rem',
-              padding: '0 1.25rem',
-              borderRadius: 'var(--border-radius-full)',
-              fontSize: '0.875rem'
-            }}
-            disabled={isSearching}
-          >
-            {isSearching ? '...' : 'Search'}
-          </button>
+          <div style={{ position: 'absolute', right: '0.25rem', top: '0.25rem', bottom: '0.25rem', display: 'flex', gap: '0.25rem' }}>
+            <button
+              type="button"
+              className="btn-primary"
+              style={{
+                padding: '0 0.75rem',
+                borderRadius: 'var(--border-radius-full)',
+                fontSize: '0.875rem',
+                background: 'linear-gradient(135deg, #a855f7, #6366f1)',
+                border: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.25rem'
+              }}
+              disabled={isSearching || isAskingDJ}
+              onClick={askDJ}
+              title="Ask the AI DJ for a recommendation!"
+            >
+              <Sparkles size={14} />
+              DJ
+            </button>
+            <button
+              type="submit"
+              className="btn-primary"
+              style={{
+                padding: '0 1rem',
+                borderRadius: 'var(--border-radius-full)',
+                fontSize: '0.875rem'
+              }}
+              disabled={isSearching || isAskingDJ}
+            >
+              Search
+            </button>
+          </div>
         </div>
       </form>
 
@@ -73,22 +128,57 @@ export default function SearchBar({ onSelect }) {
           </div>
         )}
 
-        {isSearching && (
+        {(isSearching || isAskingDJ) && (
           <div style={{ textAlign: 'center', marginTop: '2rem' }}>
             <div style={{
               width: '40px', height: '40px',
               border: '3px solid var(--glass-border)',
-              borderTopColor: 'var(--primary-accent)',
+              borderTopColor: isAskingDJ ? '#a855f7' : 'var(--primary-accent)',
               borderRadius: '50%',
               margin: '0 auto',
               animation: 'spin 0.8s linear infinite'
             }} />
-            <p className="body-text" style={{ marginTop: '1rem' }}>Searching YouTube...</p>
-            {/* spin keyframe is defined in globals.css */}
+            <p className="body-text" style={{ marginTop: '1rem' }}>
+              {isAskingDJ ? 'The DJ is reading the room...' : 'Searching YouTube...'}
+            </p>
           </div>
         )}
 
-        {hasSearched && !isSearching && results.length === 0 && (
+        {djResponse && !isAskingDJ && (
+          <div className="glass-panel animate-fade-in" style={{ padding: '1.5rem', background: 'rgba(168, 85, 247, 0.1)', border: '1px solid rgba(168, 85, 247, 0.3)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+              <Sparkles size={18} color="#a855f7" />
+              <h3 style={{ fontSize: '1rem', fontWeight: 600, color: '#e9d5ff', margin: 0 }}>Session DJ</h3>
+            </div>
+            <p className="body-text" style={{ fontSize: '0.95rem', marginBottom: '1.5rem', color: '#f3e8ff' }}>
+              "{djResponse.message}"
+            </p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+              {djResponse.recommended_queries?.map((rec, i) => (
+                <button
+                  key={i}
+                  className="btn-primary"
+                  style={{
+                    background: 'rgba(168, 85, 247, 0.2)',
+                    border: '1px solid rgba(168, 85, 247, 0.4)',
+                    color: '#e9d5ff',
+                    padding: '0.5rem 1rem',
+                    fontSize: '0.85rem',
+                    borderRadius: 'var(--border-radius-full)'
+                  }}
+                  onClick={() => {
+                    setQuery(rec);
+                    handleSearch({ preventDefault: () => {} });
+                  }}
+                >
+                  {rec}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {hasSearched && !isSearching && !isAskingDJ && !djResponse && results.length === 0 && (
           <p className="body-text" style={{ textAlign: 'center', marginTop: '2rem' }}>No results found. Try a different search.</p>
         )}
 
