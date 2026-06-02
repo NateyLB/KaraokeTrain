@@ -24,7 +24,9 @@ RUN pip install --no-cache-dir \
     "numpy<2.0.0" \
     demucs \
     faster-whisper \
-    yt-dlp
+    yt-dlp \
+    pydantic \
+    google-genai
 
 # Set the Python path for the Node app
 ENV PYTHON_BIN_PATH="/opt/venv/bin/python3"

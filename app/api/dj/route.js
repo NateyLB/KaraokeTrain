@@ -16,7 +16,8 @@ export async function POST(request) {
 
     return new Promise((resolve) => {
       const scriptPath = path.join(process.cwd(), 'lib', 'dj_agent.py');
-      const pythonProcess = spawn('venv/bin/python', [scriptPath, sessionDataStr], {
+      const pythonExec = process.env.PYTHON_BIN_PATH || 'venv/bin/python';
+      const pythonProcess = spawn(pythonExec, [scriptPath, sessionDataStr], {
         cwd: process.cwd(),
       });
 

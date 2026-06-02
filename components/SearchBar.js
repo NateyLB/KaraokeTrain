@@ -50,8 +50,20 @@ export default function SearchBar({ onSelect }) {
     e.preventDefault();
     if (!query.trim()) return;
 
+    // Smart Routing Heuristic:
+    // Route to DJ if it starts with a question/request word, contains a question mark, or is a long sentence.
+    const isQuestionWord = /^(what|can|should|could|would|recommend|suggest|how|give|some|play|any|good|who|need)\b/i.test(query.trim());
+    const hasQuestionMark = query.includes('?');
+    const isConversational = query.trim().split(/\s+/).length >= 6;
+
+    if (isQuestionWord || hasQuestionMark || isConversational) {
+      return askDJ(e);
+    }
+
+    // Otherwise route to YouTube search
     setIsSearching(true);
     setHasSearched(true);
+    setDjResponse(null);
 
     try {
       const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
@@ -84,26 +96,6 @@ export default function SearchBar({ onSelect }) {
             autoComplete="off"
           />
           <div style={{ position: 'absolute', right: '0.25rem', top: '0.25rem', bottom: '0.25rem', display: 'flex', gap: '0.25rem' }}>
-            <button
-              type="button"
-              className="btn-primary"
-              style={{
-                padding: '0 0.75rem',
-                borderRadius: 'var(--border-radius-full)',
-                fontSize: '0.875rem',
-                background: 'linear-gradient(135deg, #a855f7, #6366f1)',
-                border: 'none',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.25rem'
-              }}
-              disabled={isSearching || isAskingDJ}
-              onClick={askDJ}
-              title="Ask the AI DJ for a recommendation!"
-            >
-              <Sparkles size={14} />
-              DJ
-            </button>
             <button
               type="submit"
               className="btn-primary"

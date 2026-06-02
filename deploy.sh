@@ -27,6 +27,10 @@ gcloud secrets add-iam-policy-binding DOWNLOADER_SECRET \
   --member="serviceAccount:${SERVICE_ACCOUNT}" \
   --role="roles/secretmanager.secretAccessor"
 
+gcloud secrets add-iam-policy-binding GEMINI_API_KEY \
+  --member="serviceAccount:${SERVICE_ACCOUNT}" \
+  --role="roles/secretmanager.secretAccessor"
+
 echo "🚢 Deploying to Cloud Run..."
 gcloud run deploy $SERVICE_NAME \
   --image $IMAGE_NAME \
@@ -41,6 +45,6 @@ gcloud run deploy $SERVICE_NAME \
   --no-cpu-throttling \
   --timeout 3600 \
   --set-env-vars="STORAGE_MODE=gcs,GCS_BUCKET_NAME=$BUCKET_NAME,DOWNLOADER_API_URL=https://downloader.karaoketrain.com" \
-  --update-secrets="YOUTUBE_API_KEY=YOUTUBE_API_KEY:latest,DOWNLOADER_SECRET=DOWNLOADER_SECRET:latest"
+  --update-secrets="YOUTUBE_API_KEY=YOUTUBE_API_KEY:latest,DOWNLOADER_SECRET=DOWNLOADER_SECRET:latest,GEMINI_API_KEY=GEMINI_API_KEY:latest"
 
 echo "✅ Deployment complete!"
