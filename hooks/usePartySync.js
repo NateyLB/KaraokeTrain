@@ -106,6 +106,8 @@ export function usePartySync(roomId, role, callbacks = {}) {
             const cmd = data.remoteCommand.action;
             if (cmd === 'nextSong' && callbacksRef.current.onNextSong) callbacksRef.current.onNextSong();
             if (cmd === 'next' && callbacksRef.current.onNextSong) callbacksRef.current.onNextSong();
+            if (cmd === 'previousSong' && callbacksRef.current.onPreviousSong) callbacksRef.current.onPreviousSong();
+            if (cmd === 'previous' && callbacksRef.current.onPreviousSong) callbacksRef.current.onPreviousSong();
             if (cmd === 'alignStart' && callbacksRef.current.onAlignStart) callbacksRef.current.onAlignStart();
             lastProcessedCommandTimestamp.current = data.remoteCommand.timestamp;
           }

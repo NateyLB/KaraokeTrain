@@ -111,6 +111,20 @@ export function useAudioPlayback(roomId) {
     });
   }, [roomId]);
 
+  const handlePreviousSong = useCallback(async () => {
+    Object.values(audioRefs.current).forEach(a => {
+      if (a) { safePause(a); a.currentTime = 0; }
+    });
+    clearInterval(timeUpdateInterval.current);
+    useKaraokeStore.getState().resetForNewSong();
+
+    await fetch('/api/party', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'previous', id: roomId }),
+    });
+  }, [roomId]);
+
   const handleAlignStart = useCallback(() => {
     const { parsedLyrics, currentSongTime, setLyricsOffset } =
       useKaraokeStore.getState();
@@ -244,6 +258,7 @@ export function useAudioPlayback(roomId) {
   return {
     togglePlay,
     handleNextSong,
+    handlePreviousSong,
     handleSeek,
     handleAlignStart,
     handleYouTubeStateChange,

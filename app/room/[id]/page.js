@@ -24,7 +24,7 @@ export default function RoomPage({ params }) {
 
   // === Hooks ===
   const {
-    togglePlay, handleNextSong, handleSeek, handleAlignStart,
+    togglePlay, handleNextSong, handlePreviousSong, handleSeek, handleAlignStart,
     handleYouTubeStateChange, audioRefs, ytPlayerRef,
   } = useAudioPlayback(roomId);
 
@@ -33,6 +33,7 @@ export default function RoomPage({ params }) {
   usePartySync(roomId, 'host', {
     onTogglePlay: togglePlay,
     onNextSong: handleNextSong,
+    onPreviousSong: handlePreviousSong,
     onAlignStart: handleAlignStart,
   });
 
@@ -147,7 +148,7 @@ export default function RoomPage({ params }) {
         )}
       </div>
 
-      <PlayerControls onTogglePlay={togglePlay} onNextSong={handleNextSong} onSeek={handleSeek} />
+      <PlayerControls onTogglePlay={togglePlay} onNextSong={handleNextSong} onPreviousSong={handlePreviousSong} onSeek={handleSeek} />
 
       <div className="main-content-area">
         {song && song.jobId && (

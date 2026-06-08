@@ -102,6 +102,8 @@ export async function POST(request) {
       
     } else if (action === 'next') {
       updatedParty = partyStore.nextSong(partyId);
+    } else if (action === 'previous') {
+      updatedParty = partyStore.previousSong(partyId);
     } else if (action === 'remove') {
       const { index } = body;
       if (typeof index !== 'number') return NextResponse.json({ error: 'Index required' }, { status: 400 });

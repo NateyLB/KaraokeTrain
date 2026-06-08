@@ -1,5 +1,5 @@
 'use client';
-import { Play, Pause, SkipForward, Mic, MicOff, Volume2, VolumeX, Video, Waves, Sparkles, Settings } from 'lucide-react';
+import { Play, Pause, SkipForward, SkipBack, Mic, MicOff, Volume2, VolumeX, Video, Waves, Sparkles, Settings } from 'lucide-react';
 import useKaraokeStore from '../store/useKaraokeStore';
 
 export default function RemoteControls({ roomId }) {
@@ -20,15 +20,28 @@ export default function RemoteControls({ roomId }) {
     } catch (err) { console.error(err); }
   };
 
+  const handlePreviousSong = async () => {
+    try {
+      await fetch('/api/party', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'remoteControl', id: roomId, command: 'previous' })
+      });
+    } catch (err) { console.error(err); }
+  };
+
   return (
     <div style={{ background: 'rgba(20, 20, 25, 0.8)', backdropFilter: 'blur(10px)', padding: '1.5rem', borderRadius: '1rem', border: '1px solid var(--glass-border)', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
         {/* Main Playback Row */}
         <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', alignItems: 'center' }}>
-            <button onClick={() => setIsPlaying(!isPlaying)} className="btn-primary" style={{ padding: '0.75rem', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '3.5rem', height: '3.5rem' }}>
+            <button onClick={handlePreviousSong} className="btn-secondary" style={{ padding: '0.75rem', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '3.2rem', height: '3.2rem' }} title="Previous Song">
+                <SkipBack size={20} fill="currentColor" />
+            </button>
+            <button onClick={() => setIsPlaying(!isPlaying)} className="btn-primary" style={{ padding: '0.75rem', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '4rem', height: '4rem', boxShadow: '0 0.5rem 1rem rgba(0,0,0,0.3)' }}>
                 {isPlaying ? <Pause size={28} fill="currentColor" /> : <Play size={28} fill="currentColor" style={{ marginLeft: '0.2rem' }} />}
             </button>
-            <button onClick={handleNextSong} className="btn-secondary" style={{ padding: '0.75rem 1.5rem', borderRadius: '99px', fontSize: '1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <SkipForward size={20} /> Next Song
+            <button onClick={handleNextSong} className="btn-secondary" style={{ padding: '0.75rem', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '3.2rem', height: '3.2rem' }} title="Next Song">
+                <SkipForward size={20} fill="currentColor" />
             </button>
         </div>
         

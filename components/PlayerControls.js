@@ -1,5 +1,5 @@
 'use client';
-import { Play, Pause, Volume2, VolumeX, Video } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, Video, SkipBack, SkipForward } from 'lucide-react';
 import useKaraokeStore from '../store/useKaraokeStore';
 
 function formatTime(seconds) {
@@ -9,7 +9,7 @@ function formatTime(seconds) {
   return `${m}:${s < 10 ? '0' : ''}${s}`;
 }
 
-export default function PlayerControls({ onTogglePlay, onNextSong, onSeek }) {
+export default function PlayerControls({ onTogglePlay, onNextSong, onPreviousSong, onSeek }) {
   const { 
     isPlaying, vocalsEnabled, setVocalsEnabled, isVideoVisible, setIsVideoVisible,
     lyricsOffset, setLyricsOffset, currentSongTime, duration, parsedLyrics 
@@ -18,9 +18,17 @@ export default function PlayerControls({ onTogglePlay, onNextSong, onSeek }) {
   return (
     <div className="controls-area">
         <div className="control-buttons-row" style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem', justifyContent: 'center', alignItems: 'center' }}>
-            <button onClick={onTogglePlay} className="btn-primary" style={{ padding: '0.75rem', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '3.2rem', height: '3.2rem' }} title={isPlaying ? 'Pause' : 'Play'}>
-                {isPlaying ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" style={{ marginLeft: '0.2rem' }} />}
-            </button>
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                <button onClick={onPreviousSong} className="btn-secondary" style={{ padding: '0.75rem', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '3.2rem', height: '3.2rem' }} title="Previous Song">
+                    <SkipBack size={20} fill="currentColor" />
+                </button>
+                <button onClick={onTogglePlay} className="btn-primary" style={{ padding: '0.75rem', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '4rem', height: '4rem', boxShadow: '0 0.5rem 1rem rgba(0,0,0,0.3)' }} title={isPlaying ? 'Pause' : 'Play'}>
+                    {isPlaying ? <Pause size={28} fill="currentColor" /> : <Play size={28} fill="currentColor" style={{ marginLeft: '0.2rem' }} />}
+                </button>
+                <button onClick={onNextSong} className="btn-secondary" style={{ padding: '0.75rem', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '3.2rem', height: '3.2rem' }} title="Next Song">
+                    <SkipForward size={20} fill="currentColor" />
+                </button>
+            </div>
             <button onClick={() => setVocalsEnabled(!vocalsEnabled)} className="btn-secondary" style={{ padding: '0.75rem 1.5rem', borderRadius: '99px', fontSize: '1.1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: vocalsEnabled ? 1 : 0.7 }}>
                 {vocalsEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
                 {vocalsEnabled ? 'Vocals On' : 'Vocals Off'}
@@ -30,13 +38,13 @@ export default function PlayerControls({ onTogglePlay, onNextSong, onSeek }) {
                 {isVideoVisible ? 'Hide Video' : 'Show Video'}
             </button>
             
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', gap: '0.25rem' }}>
                 <button onClick={() => {
                     if (parsedLyrics.length > 0) {
                         const firstValidLine = parsedLyrics.find(l => l.text.trim().length > 0) || parsedLyrics[0];
                         setLyricsOffset((currentSongTime - firstValidLine.time).toFixed(2));
                     }
-                }} className="btn-secondary" style={{ padding: '0.75rem 1.5rem', borderRadius: '99px', fontSize: '1.1rem', fontWeight: 600 }} title="Click right when singing starts to align lyrics">
+                }} className="btn-secondary" style={{ padding: '0.5rem 1rem', borderRadius: '99px', fontSize: '1rem', fontWeight: 600 }} title="Click right when singing starts to align lyrics">
                     Align Start
                 </button>
                 
@@ -45,8 +53,8 @@ export default function PlayerControls({ onTogglePlay, onNextSong, onSeek }) {
                     const displayTime = ((Number(lyricsOffset) || 0) + firstValidTime).toFixed(2);
                     
                     return (
-                    <div className="align-start-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--glass-bg)', padding: '0 1rem', borderRadius: '99px', border: '1px solid var(--glass-border)' }}>
-                        <button onClick={() => setLyricsOffset(o => Math.round(((Number(o) || 0) - 0.5) * 100) / 100)} style={{ color: 'white', padding: '0.5rem', fontWeight: 'bold', background: 'transparent', border: 'none', cursor: 'pointer' }}>-</button>
+                    <div className="align-start-group" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', background: 'var(--glass-bg)', padding: '0 0.5rem', borderRadius: '99px', border: '1px solid var(--glass-border)' }}>
+                        <button onClick={() => setLyricsOffset(o => Math.round(((Number(o) || 0) - 0.5) * 100) / 100)} style={{ color: 'white', padding: '0.4rem', fontWeight: 'bold', background: 'transparent', border: 'none', cursor: 'pointer' }}>-</button>
                         <div style={{ display: 'flex', alignItems: 'center' }}>
                             <span style={{ fontSize: '0.9rem', opacity: 0.8, display: 'none' }}>Start: </span>
                             <input 
@@ -58,22 +66,22 @@ export default function PlayerControls({ onTogglePlay, onNextSong, onSeek }) {
                                     if (!isNaN(newStart)) setLyricsOffset(newStart - firstValidTime);
                                 }}
                                 onBlur={(e) => { if (e.target.value === "" || e.target.value === "-") setLyricsOffset(0); }}
-                                style={{ width: '3rem', background: 'transparent', border: 'none', color: 'white', fontSize: '0.9rem', textAlign: 'center', outline: 'none' }} 
+                                style={{ width: '2.5rem', background: 'transparent', border: 'none', color: 'white', fontSize: '0.9rem', textAlign: 'center', outline: 'none', padding: 0 }} 
                             />
                             <span style={{ fontSize: '0.9rem', opacity: 0.8 }}>s</span>
                         </div>
-                        <button onClick={() => setLyricsOffset(o => Math.round(((Number(o) || 0) + 0.5) * 100) / 100)} style={{ color: 'white', padding: '0.5rem', fontWeight: 'bold', background: 'transparent', border: 'none', cursor: 'pointer' }}>+</button>
+                        <button onClick={() => setLyricsOffset(o => Math.round(((Number(o) || 0) + 0.5) * 100) / 100)} style={{ color: 'white', padding: '0.4rem', fontWeight: 'bold', background: 'transparent', border: 'none', cursor: 'pointer' }}>+</button>
                         <button 
                             onClick={() => setLyricsOffset(0)} 
                             style={{ 
                                 color: 'var(--secondary-accent)', 
-                                padding: '0.5rem', 
-                                fontSize: '0.8rem', 
+                                padding: '0.4rem', 
+                                fontSize: '0.75rem', 
                                 fontWeight: 'bold', 
                                 background: 'transparent', 
                                 border: 'none', 
                                 cursor: 'pointer',
-                                visibility: lyricsOffset !== 0 ? 'visible' : 'hidden'
+                                visibility: 'visible'
                             }}
                         >
                             Reset
@@ -83,9 +91,6 @@ export default function PlayerControls({ onTogglePlay, onNextSong, onSeek }) {
                 })()}
             </div>
 
-            <button onClick={onNextSong} className="btn-secondary" style={{ padding: '0.75rem 1.5rem', borderRadius: '99px', fontSize: '1.1rem', fontWeight: 600 }}>
-                Next Song
-            </button>
         </div>
 
         <div className="seekbar-row" style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0 2rem', width: '100%', maxWidth: '900px', margin: '0 auto' }}>
