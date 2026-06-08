@@ -22,8 +22,8 @@ export default function PlayerControls({ onTogglePlay, onNextSong, onPreviousSon
                 <button onClick={onPreviousSong} className="btn-secondary" style={{ padding: '0.75rem', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '3.2rem', height: '3.2rem' }} title="Previous Song">
                     <SkipBack size={20} fill="currentColor" />
                 </button>
-                <button onClick={onTogglePlay} className="btn-primary" style={{ padding: '0.75rem', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '4rem', height: '4rem', boxShadow: '0 0.5rem 1rem rgba(0,0,0,0.3)' }} title={isPlaying ? 'Pause' : 'Play'}>
-                    {isPlaying ? <Pause size={28} fill="currentColor" /> : <Play size={28} fill="currentColor" style={{ marginLeft: '0.2rem' }} />}
+                <button onClick={onTogglePlay} className="btn-primary" style={{ padding: '0.75rem', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '3.2rem', height: '3.2rem', boxShadow: '0 0.5rem 1rem rgba(0,0,0,0.3)' }} title={isPlaying ? 'Pause' : 'Play'}>
+                    {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" style={{ marginLeft: '0.2rem' }} />}
                 </button>
                 <button onClick={onNextSong} className="btn-secondary" style={{ padding: '0.75rem', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '3.2rem', height: '3.2rem' }} title="Next Song">
                     <SkipForward size={20} fill="currentColor" />
