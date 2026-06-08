@@ -66,8 +66,8 @@ export default function RoomPage({ params }) {
       <div style={{ display: 'flex', minHeight: '100vh', padding: '2rem', position: 'relative' }}>
         <OverlayButtons roomId={roomId} showSearchButton={false} />
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <div style={{ maxWidth: '40rem', width: '100%', marginBottom: '4rem', textAlign: 'center' }}>
-            <h3 className="heading-2" style={{ fontSize: '1.2rem', marginBottom: '1rem', color: 'var(--text-muted)' }}>Search for a song to begin</h3>
+          <div style={{ maxWidth: '40rem', width: '100%', marginBottom: '4rem', textAlign: 'center', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, maxHeight: '50vh' }}>
+            <h3 className="heading-2" style={{ fontSize: '1.2rem', marginBottom: '1rem', color: 'var(--text-muted)', flexShrink: 0 }}>Search for a song to begin</h3>
             <SearchBar onSelect={handleQueueSong} />
           </div>
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
@@ -86,8 +86,8 @@ export default function RoomPage({ params }) {
       <div style={{ display: 'flex', minHeight: '100vh', padding: '2rem', position: 'relative' }}>
         <OverlayButtons roomId={roomId} showSearchButton={false} />
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <div style={{ maxWidth: '40rem', width: '100%', marginBottom: '4rem', textAlign: 'center' }}>
-            <h3 className="heading-2" style={{ fontSize: '1.2rem', marginBottom: '1rem', color: 'var(--text-muted)' }}>Search to add more songs to the queue</h3>
+          <div style={{ maxWidth: '40rem', width: '100%', marginBottom: '4rem', textAlign: 'center', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, maxHeight: '40vh' }}>
+            <h3 className="heading-2" style={{ fontSize: '1.2rem', marginBottom: '1rem', color: 'var(--text-muted)', flexShrink: 0 }}>Search to add more songs to the queue</h3>
             <SearchBar onSelect={handleQueueSong} />
           </div>
           <LoadingScreen />
@@ -120,7 +120,7 @@ export default function RoomPage({ params }) {
       <OverlayButtons roomId={roomId} showSearchButton={true} />
 
       {isSearchOpen && (
-        <div style={{ height: '30vh', minHeight: '200px', display: 'flex', flexDirection: 'column', padding: '0 2rem', marginBottom: '1rem', zIndex: 10, position: 'relative' }}>
+        <div style={{ height: '50vh', maxHeight: '500px', minHeight: '300px', display: 'flex', flexDirection: 'column', padding: '0 2rem', marginBottom: '1rem', zIndex: 10, position: 'relative' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', width: '100%' }}>
             <h3 className="heading-2" style={{ fontSize: '1.2rem', margin: 0, color: 'var(--text-muted)' }}>Search YouTube</h3>
             <button onClick={() => setIsSearchOpen(false)} style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', borderRadius: '50%', color: 'white', cursor: 'pointer', padding: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

@@ -12,6 +12,8 @@ export default function SearchBar({ onSelect }) {
   const [isAskingDJ, setIsAskingDJ] = useState(false);
   const [djResponse, setDjResponse] = useState(null);
   const [isListening, setIsListening] = useState(false);
+  const [catalog, setCatalog] = useState([]);
+  const [isLoadingCatalog, setIsLoadingCatalog] = useState(true);
   const recognitionRef = useRef(null);
   const textareaRef = useRef(null);
 
@@ -22,6 +24,22 @@ export default function SearchBar({ onSelect }) {
       textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 150)}px`;
     }
   }, [query]);
+
+  // Fetch catalog on mount
+  useEffect(() => {
+    async function fetchCatalog() {
+      try {
+        const res = await fetch('/api/catalog');
+        const data = await res.json();
+        setCatalog(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error('Failed to fetch catalog:', err);
+      } finally {
+        setIsLoadingCatalog(false);
+      }
+    }
+    fetchCatalog();
+  }, []);
 
   const toggleListening = () => {
     if (isListening) {
@@ -212,9 +230,76 @@ export default function SearchBar({ onSelect }) {
 
       <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
         {!hasSearched && (
-          <div style={{ textAlign: 'center', opacity: 0.4, marginTop: '3rem' }}>
-            <Music size={56} style={{ margin: '0 auto', marginBottom: '1rem' }} />
-            <p className="body-text">Search for any song to add it to the queue.</p>
+          <div style={{ marginTop: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', paddingLeft: '0.5rem' }}>
+              <Music2 size={18} color="var(--primary-accent)" />
+              <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-main)', margin: 0 }}>Ready to Sing</h3>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginLeft: 'auto' }}>
+                {isLoadingCatalog ? 'Loading...' : `${catalog.length} songs`}
+              </span>
+            </div>
+            
+            {isLoadingCatalog && catalog.length === 0 ? (
+               <div style={{ textAlign: 'center', opacity: 0.4, marginTop: '3rem' }}>
+                 <Music size={40} style={{ margin: '0 auto', marginBottom: '1rem' }} className="animate-pulse-glow" />
+                 <p className="body-text">Loading catalog...</p>
+               </div>
+            ) : catalog.length === 0 ? (
+               <div style={{ textAlign: 'center', opacity: 0.4, marginTop: '3rem' }}>
+                 <Music size={56} style={{ margin: '0 auto', marginBottom: '1rem' }} />
+                 <p className="body-text">Search for any song to add it to the queue.</p>
+               </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {catalog.map((track, i) => (
+                  <div
+                    key={track.videoId || i}
+                    className="glass-panel animate-fade-in"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: '0.75rem',
+                      gap: '1rem',
+                      animationDelay: `${i * 0.05}s`,
+                      cursor: 'pointer',
+                      transition: 'background 0.2s ease',
+                      borderLeft: '3px solid var(--primary-accent)'
+                    }}
+                    onClick={() => {
+                      onSelect(track);
+                      setQuery('');
+                      setResults([]);
+                      setHasSearched(false);
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.07)'}
+                    onMouseLeave={e => e.currentTarget.style.background = ''}
+                  >
+                    {track.albumArt ? (
+                      <img
+                        src={track.albumArt}
+                        alt={track.title}
+                        style={{ width: '56px', height: '42px', borderRadius: '4px', objectFit: 'cover', flexShrink: 0 }}
+                      />
+                    ) : (
+                      <div style={{ width: '56px', height: '42px', borderRadius: '4px', background: 'var(--glass-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <Music2 size={16} color="var(--text-muted)" />
+                      </div>
+                    )}
+
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <h3 style={{ fontSize: '0.9rem', fontWeight: 600, lineHeight: 1.3, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+                        {track.title ? track.title.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>') : ''}
+                      </h3>
+                      <p className="body-text" style={{ fontSize: '0.75rem', marginTop: '0.1rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {track.artist ? track.artist.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>') : ''}
+                      </p>
+                    </div>
+
+                    <ChevronRight size={16} color="var(--text-muted)" style={{ flexShrink: 0 }} />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
