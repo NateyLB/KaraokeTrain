@@ -200,9 +200,8 @@ export function useAudioAnalyzer() {
     if (vocoderOscRef.current) {
       try { vocoderOscRef.current.stop(); } catch(e){}
     }
-    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-      audioContextRef.current.close().catch(() => {});
-    }
+    // DO NOT CLOSE the global window.__karaokeAudioCtx!
+    // It is shared with useAudioPlayback.js
     setIsListening(false);
     setVolume(0);
     setPitch(null);

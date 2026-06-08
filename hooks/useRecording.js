@@ -2,14 +2,12 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import useKaraokeStore from '../store/useKaraokeStore';
 
 export function useRecording() {
-  const [isRecording, setIsRecording] = useState(false);
+  const { isRecording, setIsRecording, setToast } = useKaraokeStore();
   const [isRecordingVideo, setIsRecordingVideo] = useState(false);
   const [videoStream, setVideoStream] = useState(null);
   
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
-
-  const { setToast } = useKaraokeStore();
 
   const enableVideo = async () => {
     try {

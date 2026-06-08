@@ -29,13 +29,13 @@ export default function PlayerControls({ onTogglePlay, onNextSong, onPreviousSon
                     <SkipForward size={20} fill="currentColor" />
                 </button>
             </div>
-            <button onClick={() => setVocalsEnabled(!vocalsEnabled)} className="btn-secondary" style={{ padding: '0.75rem 1.5rem', borderRadius: '99px', fontSize: '1.1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: vocalsEnabled ? 1 : 0.7 }}>
+            <button onClick={() => setVocalsEnabled(!vocalsEnabled)} className="btn-secondary mobile-icon-btn" style={{ padding: '0.75rem 1.5rem', borderRadius: '99px', fontSize: '1.1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: vocalsEnabled ? 1 : 0.7 }}>
                 {vocalsEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
-                {vocalsEnabled ? 'Vocals On' : 'Vocals Off'}
+                <span className="hide-on-mobile">{vocalsEnabled ? 'Vocals On' : 'Vocals Off'}</span>
             </button>
-            <button onClick={() => setIsVideoVisible(!isVideoVisible)} className="btn-secondary" style={{ padding: '0.75rem 1.5rem', borderRadius: '99px', fontSize: '1.1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: isVideoVisible ? 1 : 0.7 }}>
+            <button onClick={() => setIsVideoVisible(!isVideoVisible)} className="btn-secondary mobile-icon-btn" style={{ padding: '0.75rem 1.5rem', borderRadius: '99px', fontSize: '1.1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: isVideoVisible ? 1 : 0.7 }}>
                 <Video size={20} />
-                {isVideoVisible ? 'Hide Video' : 'Show Video'}
+                <span className="hide-on-mobile">{isVideoVisible ? 'Hide Video' : 'Show Video'}</span>
             </button>
             
             <div style={{ display: 'flex', gap: '0.25rem' }}>
@@ -44,8 +44,9 @@ export default function PlayerControls({ onTogglePlay, onNextSong, onPreviousSon
                         const firstValidLine = parsedLyrics.find(l => l.text.trim().length > 0) || parsedLyrics[0];
                         setLyricsOffset((currentSongTime - firstValidLine.time).toFixed(2));
                     }
-                }} className="btn-secondary" style={{ padding: '0.5rem 1rem', borderRadius: '99px', fontSize: '1rem', fontWeight: 600 }} title="Click right when singing starts to align lyrics">
-                    Align Start
+                }} className="btn-secondary mobile-icon-btn" style={{ padding: '0.5rem 1rem', borderRadius: '99px', fontSize: '1rem', fontWeight: 600 }} title="Click right when singing starts to align lyrics">
+                    <span className="hide-on-mobile">Align Start</span>
+                    <span style={{ display: 'none' }} className="show-on-mobile-inline">Align</span>
                 </button>
                 
                 {(() => {

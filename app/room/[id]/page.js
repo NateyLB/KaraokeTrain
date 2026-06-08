@@ -41,7 +41,7 @@ export default function RoomPage({ params }) {
     partyState, stems, isLoading, isVideoVisible,
     currentSongTime, lyricsOffset, parsedLyrics, lyricsSource,
     isSearchOpen, setIsSearchOpen, hostUrl, setHostUrl,
-    setDuration,
+    setDuration, isControlsVisible,
   } = useKaraokeStore();
 
   // Set hostUrl on mount
@@ -68,14 +68,14 @@ export default function RoomPage({ params }) {
       <div style={{ display: 'flex', minHeight: '100vh', padding: '2rem', position: 'relative' }}>
         <OverlayButtons roomId={roomId} showSearchButton={false} context="room-empty" />
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <div style={{ maxWidth: '40rem', width: '100%', marginBottom: '4rem', textAlign: 'center', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, maxHeight: '50vh' }}>
+          <div style={{ maxWidth: '40rem', width: '100%', marginBottom: '2rem', textAlign: 'center', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, maxHeight: '80vh' }}>
             <h3 className="heading-2" style={{ fontSize: '1.2rem', marginBottom: '1rem', color: 'var(--text-muted)', flexShrink: 0 }}>Search for a song to begin</h3>
             <SearchBar onSelect={handleQueueSong} />
           </div>
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', width: '100%' }}>
             <QrCode size={120} color="var(--primary-accent)" style={{ opacity: 0.8, marginBottom: '2rem' }} />
-            <h2 className="heading-1 text-gradient" style={{ fontSize: '4rem', letterSpacing: '0.5rem', marginBottom: '1rem' }}>{roomId}</h2>
-            <p className="body-text" style={{ fontSize: '1.5rem', opacity: 0.8, marginBottom: '3rem' }}>Join at <b>{hostUrl}/remote/{roomId}</b> to add songs!</p>
+            <h2 className="heading-1 text-gradient" style={{ fontSize: 'clamp(2.5rem, 10vw, 4rem)', letterSpacing: 'clamp(0.2rem, 2vw, 0.5rem)', marginBottom: '1rem', wordBreak: 'break-all' }}>{roomId}</h2>
+            <p className="body-text" style={{ fontSize: 'clamp(1rem, 4vw, 1.5rem)', opacity: 0.8, marginBottom: '3rem', wordBreak: 'break-word', padding: '0 1rem' }}>Join at <b>{hostUrl}/remote/{roomId}</b> to add songs!</p>
           </div>
         </div>
       </div>
@@ -88,7 +88,7 @@ export default function RoomPage({ params }) {
       <div style={{ display: 'flex', minHeight: '100vh', padding: '2rem', position: 'relative' }}>
         <OverlayButtons roomId={roomId} showSearchButton={false} />
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <div style={{ maxWidth: '40rem', width: '100%', marginBottom: '4rem', textAlign: 'center', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, maxHeight: '40vh' }}>
+          <div style={{ maxWidth: '40rem', width: '100%', marginBottom: '2rem', textAlign: 'center', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, maxHeight: '80vh' }}>
             <h3 className="heading-2" style={{ fontSize: '1.2rem', marginBottom: '1rem', color: 'var(--text-muted)', flexShrink: 0 }}>Search to add more songs to the queue</h3>
             <SearchBar onSelect={handleQueueSong} />
           </div>
@@ -106,8 +106,18 @@ export default function RoomPage({ params }) {
         .controls-area { display: flex; flex-direction: column; width: 100%; align-items: center; gap: 1rem; margin-bottom: 1rem; }
         .video-container { width: 100%; max-width: 900px; margin: 0 auto 1rem auto; padding: 0 2rem; }
         .lyrics-container { flex: 1; display: flex; flex-direction: column; min-height: 0; position: relative; width: 100%; }
-        @media (orientation: landscape) and (min-width: 600px) {
-            .karaoke-layout { padding-bottom: 6rem !important; }
+        @media (orientation: landscape) and (min-width: 600px) and (max-width: 1024px) {
+            .karaoke-layout { padding-bottom: ${isControlsVisible ? '8rem' : '1rem'} !important; }
+            .main-content-area { flex-direction: row; padding: 0 1rem; gap: 1rem; align-items: stretch; }
+            .video-container { flex: 1; max-width: none; margin: 0; padding: 0; display: flex; flex-direction: column; justify-content: center; }
+            .lyrics-container { flex: 1; margin-top: 0 !important; }
+            .controls-area { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(10, 10, 15, 0.95); backdrop-filter: blur(20px); border-top: 1px solid var(--glass-border); padding: 0.5rem 1rem; z-index: 40; flex-direction: column; justify-content: center; align-items: center; gap: 0.5rem; margin-bottom: 0; }
+            .controls-area button { padding: 0.4rem 0.8rem !important; font-size: 0.8rem !important; }
+            .control-buttons-row { flex-wrap: wrap !important; gap: 0.5rem !important; margin-bottom: 0 !important; justify-content: center; width: 100%; }
+            .seekbar-row { width: 100%; max-width: 800px; padding: 0 !important; margin: 0 !important; }
+        }
+        @media (orientation: landscape) and (min-width: 1025px) {
+            .karaoke-layout { padding-bottom: ${isControlsVisible ? '6rem' : '1rem'} !important; }
             .main-content-area { flex-direction: row; padding: 0 2rem; gap: 2rem; align-items: stretch; }
             .video-container { flex: 1; max-width: none; margin: 0; padding: 0; display: flex; flex-direction: column; justify-content: center; }
             .lyrics-container { flex: 1; margin-top: 0 !important; }
@@ -122,7 +132,7 @@ export default function RoomPage({ params }) {
       <OverlayButtons roomId={roomId} showSearchButton={true} />
 
       {isSearchOpen && (
-        <div style={{ height: '50vh', maxHeight: '500px', minHeight: '300px', display: 'flex', flexDirection: 'column', padding: '0 2rem', marginBottom: '1rem', zIndex: 10, position: 'relative' }}>
+        <div style={{ height: '80vh', maxHeight: '80vh', minHeight: '300px', display: 'flex', flexDirection: 'column', padding: '0 2rem', marginBottom: '1rem', zIndex: 10, position: 'relative' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', width: '100%' }}>
             <h3 className="heading-2" style={{ fontSize: '1.2rem', margin: 0, color: 'var(--text-muted)' }}>Search YouTube</h3>
             <button onClick={() => setIsSearchOpen(false)} style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', borderRadius: '50%', color: 'white', cursor: 'pointer', padding: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -148,7 +158,9 @@ export default function RoomPage({ params }) {
         )}
       </div>
 
-      <PlayerControls onTogglePlay={togglePlay} onNextSong={handleNextSong} onPreviousSong={handlePreviousSong} onSeek={handleSeek} />
+      <div style={{ display: isControlsVisible ? 'block' : 'none' }}>
+        <PlayerControls onTogglePlay={togglePlay} onNextSong={handleNextSong} onPreviousSong={handlePreviousSong} onSeek={handleSeek} />
+      </div>
 
       <div className="main-content-area">
         {song && song.jobId && (

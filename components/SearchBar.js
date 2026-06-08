@@ -319,7 +319,8 @@ export default function SearchBar({ onSelect }) {
           </div>
         )}
 
-        {djResponse && !isAskingDJ && (
+        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem', paddingBottom: '1rem' }}>
+          {djResponse && !isAskingDJ && (
           <div className="glass-panel animate-fade-in" style={{ padding: '1.5rem', background: 'rgba(168, 85, 247, 0.1)', border: '1px solid rgba(168, 85, 247, 0.3)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
               <Sparkles size={18} color="#a855f7" />
@@ -403,6 +404,7 @@ export default function SearchBar({ onSelect }) {
             <ChevronRight size={18} color="var(--text-muted)" style={{ flexShrink: 0 }} />
           </div>
         ))}
+        </div>
       </div>
     </div>
   );

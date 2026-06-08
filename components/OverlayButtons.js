@@ -1,5 +1,5 @@
 'use client';
-import { Search, Music, HelpCircle, Mic, MicOff, Circle } from 'lucide-react';
+import { Search, Music, HelpCircle, Mic, MicOff, Circle, Play } from 'lucide-react';
 import useKaraokeStore from '../store/useKaraokeStore';
 import SongQueue from './SongQueue';
 import InfoModal from './InfoModal';
@@ -9,13 +9,35 @@ import InfoModal from './InfoModal';
  * plus the SongQueue drawer itself.
  */
 export default function OverlayButtons({ roomId, showSearchButton = true, context = 'room' }) {
-  const { partyState, isSearchOpen, setIsSearchOpen, isQueueOpen, setIsQueueOpen, isInfoOpen, setIsInfoOpen, isMicExpanded, setIsMicExpanded, micEnabled, isRecordingExpanded, setIsRecordingExpanded } = useKaraokeStore();
+  const { partyState, isSearchOpen, setIsSearchOpen, isQueueOpen, setIsQueueOpen, isInfoOpen, setIsInfoOpen, isMicExpanded, setIsMicExpanded, micEnabled, isRecordingExpanded, setIsRecordingExpanded, isRecording, isControlsVisible, setIsControlsVisible } = useKaraokeStore();
 
   return (
     <>
       {!isSearchOpen && (
         <div style={{ position: 'fixed', top: '1rem', right: '1rem', zIndex: 50, display: 'flex', gap: '0.5rem' }}>
           
+          {/* 0. Toggle Playback Controls */}
+          {context === 'room' && (
+            <button
+              className="hide-on-desktop"
+              onClick={() => setIsControlsVisible(!isControlsVisible)}
+              title={isControlsVisible ? "Hide Playback Controls" : "Show Playback Controls"}
+              style={{
+                background: 'var(--glass-bg)',
+                border: '1px solid var(--glass-border)',
+                borderRadius: '50%', width: '3rem', height: '3rem',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: isControlsVisible ? 'var(--primary-accent)' : 'var(--text-muted)', cursor: 'pointer',
+                boxShadow: '0 0.25rem 0.75rem rgba(0,0,0,0.3)',
+                transition: 'all 0.2s ease',
+              }}
+              onMouseEnter={e => !isControlsVisible && (e.currentTarget.style.color = 'white')}
+              onMouseLeave={e => !isControlsVisible && (e.currentTarget.style.color = 'var(--text-muted)')}
+            >
+              <Play size={20} />
+            </button>
+          )}
+
           {/* 1. Mic Button */}
           {context === 'room' && (
             <button
@@ -25,11 +47,11 @@ export default function OverlayButtons({ roomId, showSearchButton = true, contex
               }}
               title="Microphone Panel"
               style={{
-                background: micEnabled ? 'rgba(236, 72, 153, 0.9)' : 'var(--glass-bg)', 
-                border: `1px solid ${micEnabled ? 'var(--secondary-accent)' : 'var(--glass-border)'}`,
+                background: 'var(--glass-bg)', 
+                border: '1px solid var(--glass-border)',
                 borderRadius: '50%', width: '3rem', height: '3rem',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: micEnabled ? 'white' : 'var(--text-muted)', cursor: 'pointer',
+                color: micEnabled ? 'var(--secondary-accent)' : 'var(--text-muted)', cursor: 'pointer',
                 boxShadow: '0 0.25rem 0.75rem rgba(0,0,0,0.3)',
                 transition: 'all 0.2s ease',
               }}
@@ -49,18 +71,18 @@ export default function OverlayButtons({ roomId, showSearchButton = true, contex
               }}
               title="Recording Panel"
               style={{
-                background: isRecordingExpanded ? 'rgba(239, 68, 68, 0.9)' : 'var(--glass-bg)', 
-                border: `1px solid ${isRecordingExpanded ? '#ef4444' : 'var(--glass-border)'}`,
+                background: 'var(--glass-bg)', 
+                border: '1px solid var(--glass-border)',
                 borderRadius: '50%', width: '3rem', height: '3rem',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: isRecordingExpanded ? 'white' : 'var(--text-muted)', cursor: 'pointer',
+                color: isRecordingExpanded || isRecording ? '#ef4444' : 'var(--text-muted)', cursor: 'pointer',
                 boxShadow: '0 0.25rem 0.75rem rgba(0,0,0,0.3)',
                 transition: 'all 0.2s ease',
               }}
-              onMouseEnter={e => !isRecordingExpanded && (e.currentTarget.style.color = 'white')}
-              onMouseLeave={e => !isRecordingExpanded && (e.currentTarget.style.color = 'var(--text-muted)')}
+              onMouseEnter={e => !(isRecordingExpanded || isRecording) && (e.currentTarget.style.color = 'white')}
+              onMouseLeave={e => !(isRecordingExpanded || isRecording) && (e.currentTarget.style.color = 'var(--text-muted)')}
             >
-              <Circle size={20} fill={isRecordingExpanded ? "white" : "none"} />
+              <Circle size={20} fill={isRecording ? "#ef4444" : "none"} color={isRecordingExpanded || isRecording ? "#ef4444" : "currentColor"} />
             </button>
           )}
 
@@ -87,15 +109,17 @@ export default function OverlayButtons({ roomId, showSearchButton = true, contex
               onClick={() => setIsQueueOpen(!isQueueOpen)}
             title="Toggle Queue"
             style={{
-              background: isQueueOpen ? 'var(--secondary-accent)' : 'var(--glass-bg)', 
-              border: `1px solid ${isQueueOpen ? 'var(--secondary-accent)' : 'var(--glass-border)'}`,
+              background: 'var(--glass-bg)', 
+              border: '1px solid var(--glass-border)',
               borderRadius: '50%', width: '3rem', height: '3rem',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: isQueueOpen ? 'white' : 'var(--secondary-accent)', cursor: 'pointer',
+              color: isQueueOpen ? 'var(--secondary-accent)' : 'var(--text-muted)', cursor: 'pointer',
               boxShadow: '0 0.25rem 0.75rem rgba(0,0,0,0.3)',
               position: 'relative',
               transition: 'all 0.2s ease',
             }}
+            onMouseEnter={e => !isQueueOpen && (e.currentTarget.style.color = 'white')}
+            onMouseLeave={e => !isQueueOpen && (e.currentTarget.style.color = 'var(--text-muted)')}
           >
             <Music size={20} />
             {partyState?.queue?.length > 0 && (
@@ -129,6 +153,7 @@ export default function OverlayButtons({ roomId, showSearchButton = true, contex
           >
             <HelpCircle size={20} />
           </button>
+
         </div>
       )}
       <SongQueue roomId={roomId} />
