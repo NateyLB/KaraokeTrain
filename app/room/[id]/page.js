@@ -156,9 +156,11 @@ export default function RoomPage({ params }) {
         <div className="lyrics-container" style={{ marginTop: isVideoVisible ? '0' : '2rem' }}>
           {parsedLyrics.length > 0 && (
             <>
-              <div style={{ position: 'absolute', top: 0, right: '1rem', background: 'var(--glass-bg)', padding: '0.25rem 0.75rem', borderRadius: 'var(--border-radius-full)', fontSize: '0.75rem', color: 'var(--text-muted)', zIndex: 10, border: '1px solid var(--glass-border)' }}>
-                Source: {lyricsSource}
-              </div>
+              {process.env.NODE_ENV === 'development' && (
+                <div style={{ position: 'absolute', top: 0, right: '1rem', background: 'var(--glass-bg)', padding: '0.25rem 0.75rem', borderRadius: 'var(--border-radius-full)', fontSize: '0.75rem', color: 'var(--text-muted)', zIndex: 10, border: '1px solid var(--glass-border)' }}>
+                  Source: {lyricsSource}
+                </div>
+              )}
               <LyricsDisplay lyrics={parsedLyrics} currentTime={Math.max(0, currentSongTime - (Number(lyricsOffset) || 0))} />
             </>
           )}
