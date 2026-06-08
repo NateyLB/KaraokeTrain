@@ -87,68 +87,31 @@ export default function MicrophonePanel() {
     }
   }, [partyState, isLoading, isListening, stopListening]);
 
-  // === Draggable position ===
-  const [micPos, setMicPos] = useState({ x: typeof window !== 'undefined' ? window.innerWidth - 176 : 16, y: 16 });
-  const isDraggingMic = useRef(false);
-  const dragStartPos = useRef({ x: 0, y: 0 });
-
-  const handlePointerDown = (e) => {
-      if (e.target.tagName.toLowerCase() === 'input' || e.target.tagName.toLowerCase() === 'button' || e.target.closest('button')) return;
-      isDraggingMic.current = true;
-      dragStartPos.current = { x: e.clientX - micPos.x, y: e.clientY - micPos.y };
-      e.target.setPointerCapture(e.pointerId);
-  };
-
-  const handlePointerMove = (e) => {
-      if (!isDraggingMic.current) return;
-      setMicPos({
-          x: e.clientX - dragStartPos.current.x,
-          y: e.clientY - dragStartPos.current.y
-      });
-  };
-
-  const handlePointerUp = (e) => {
-      isDraggingMic.current = false;
-      e.target.releasePointerCapture(e.pointerId);
-  };
+  // === Panel visibility is controlled entirely by isMicExpanded ===
 
   return (
     <div 
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onClick={() => {
-          if (!isDraggingMic.current) {
-              setIsMicExpanded(!isMicExpanded);
-          }
-      }}
       style={{
         position: 'fixed',
-        top: micPos.y,
-        left: micPos.x,
-        background: isMicExpanded ? 'rgba(20, 20, 25, 0.95)' : (isListening ? 'rgba(236, 72, 153, 0.9)' : 'rgba(20, 20, 25, 0.8)'),
+        top: '4.5rem',
+        right: '1rem',
+        background: 'rgba(20, 20, 25, 0.95)',
         backdropFilter: 'blur(20px)',
         border: `1px solid ${isListening ? 'var(--secondary-accent)' : 'var(--glass-border)'}`,
-        borderRadius: isMicExpanded ? '1rem' : '50%',
-        padding: isMicExpanded ? '0.8rem' : '0.6rem',
+        borderRadius: '1rem',
+        padding: '1rem',
         display: 'flex',
         flexDirection: 'column',
-        gap: isMicExpanded ? '0.6rem' : '0',
-        boxShadow: '0 1rem 2rem rgba(0,0,0,0.5)',
-        zIndex: 50,
-        minWidth: isMicExpanded ? '220px' : 'auto',
+        gap: '0.75rem',
+        boxShadow: '0 1rem 3rem rgba(0,0,0,0.5)',
+        zIndex: 49,
+        minWidth: '240px',
         width: 'max-content',
-        cursor: isDraggingMic.current ? 'grabbing' : 'grab',
-        touchAction: 'none',
-        transform: isMicExpanded ? 'translateX(calc(-100% + 47px))' : 'none',
-        transition: isDraggingMic.current ? 'none' : 'background 0.2s ease, border-radius 0.2s ease, transform 0.2s cubic-bezier(0.25, 1, 0.5, 1)'
+        opacity: isMicExpanded ? 1 : 0,
+        transform: isMicExpanded ? 'translateY(0)' : 'translateY(-10px)',
+        pointerEvents: isMicExpanded ? 'auto' : 'none',
+        transition: 'all 0.2s cubic-bezier(0.25, 1, 0.5, 1)'
     }}>
-        {!isMicExpanded ? (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '28px', height: '28px' }}>
-                {isListening ? <Mic size={20} color="white" /> : <MicOff size={20} color="var(--text-muted)" />}
-            </div>
-        ) : (
-            <>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                        <button
@@ -276,8 +239,6 @@ export default function MicrophonePanel() {
             <AlertCircle size={14} /> {micError}
           </p>
         )}
-        </>
-      )}
     </div>
   );
 }

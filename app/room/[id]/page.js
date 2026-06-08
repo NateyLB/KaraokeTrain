@@ -64,7 +64,7 @@ export default function RoomPage({ params }) {
   if (!partyState || (!partyState.currentSong && !isLoading)) {
     return (
       <div style={{ display: 'flex', minHeight: '100vh', padding: '2rem', position: 'relative' }}>
-        <OverlayButtons roomId={roomId} showSearchButton={false} />
+        <OverlayButtons roomId={roomId} showSearchButton={false} context="room-empty" />
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           <div style={{ maxWidth: '40rem', width: '100%', marginBottom: '4rem', textAlign: 'center', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, maxHeight: '50vh' }}>
             <h3 className="heading-2" style={{ fontSize: '1.2rem', marginBottom: '1rem', color: 'var(--text-muted)', flexShrink: 0 }}>Search for a song to begin</h3>
@@ -156,7 +156,7 @@ export default function RoomPage({ params }) {
         <div className="lyrics-container" style={{ marginTop: isVideoVisible ? '0' : '2rem' }}>
           {parsedLyrics.length > 0 && (
             <>
-              {process.env.NODE_ENV === 'development' && (
+              {typeof window !== 'undefined' && window.location.hostname === 'localhost' && (
                 <div style={{ position: 'absolute', top: 0, right: '1rem', background: 'var(--glass-bg)', padding: '0.25rem 0.75rem', borderRadius: 'var(--border-radius-full)', fontSize: '0.75rem', color: 'var(--text-muted)', zIndex: 10, border: '1px solid var(--glass-border)' }}>
                   Source: {lyricsSource}
                 </div>

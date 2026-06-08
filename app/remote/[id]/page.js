@@ -6,6 +6,7 @@ import SearchBar from '../../../components/SearchBar';
 import RemoteControls from '../../../components/RemoteControls';
 import useKaraokeStore from '../../../store/useKaraokeStore';
 import { usePartySync } from '../../../hooks/usePartySync';
+import OverlayButtons from '../../../components/OverlayButtons';
 
 export default function RemotePage({ params }) {
   const unwrappedParams = use(params);
@@ -85,8 +86,11 @@ export default function RemotePage({ params }) {
   };
 
   return (
-    <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '2rem', minHeight: '100vh', paddingBottom: '100px' }}>
+    <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '2rem', minHeight: '100vh', paddingBottom: '100px', position: 'relative' }}>
       
+      {/* Remote Context Info Toggle */}
+      <OverlayButtons roomId={roomId} context="remote" showSearchButton={false} />
+
       <header style={{ textAlign: 'center', marginTop: '1rem' }}>
         <p className="body-text" style={{ opacity: 0.6, fontSize: '0.9rem', marginBottom: '0.2rem' }}>Connected to Room</p>
         <h1 className="heading-2 text-gradient" style={{ letterSpacing: '0.2rem' }}>{roomId}</h1>

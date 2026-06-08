@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Music2, Tv, Smartphone } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import OverlayButtons from '../components/OverlayButtons';
 
 export default function Home() {
   const router = useRouter();
@@ -22,8 +23,11 @@ export default function Home() {
   };
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4rem', alignItems: 'center', justifyContent: 'center', minHeight: '80vh' }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4rem', alignItems: 'center', justifyContent: 'center', minHeight: '80vh', position: 'relative' }}>
       
+      {/* Home Context Info Toggle (Hides Mic/Search/Queue) */}
+      <OverlayButtons roomId="" showSearchButton={false} context="home" />
+
       <header style={{ textAlign: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
           <Music2 size={56} color="var(--primary-accent)" />
