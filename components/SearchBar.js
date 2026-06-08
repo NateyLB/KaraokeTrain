@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Search, Music2, ChevronRight, Music, Sparkles, Mic } from 'lucide-react';
 import useKaraokeStore from '../store/useKaraokeStore';
 
@@ -13,6 +13,15 @@ export default function SearchBar({ onSelect }) {
   const [djResponse, setDjResponse] = useState(null);
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef(null);
+  const textareaRef = useRef(null);
+
+  // Auto-resize textarea
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 150)}px`;
+    }
+  }, [query]);
 
   const toggleListening = () => {
     if (isListening) {
@@ -137,18 +146,33 @@ export default function SearchBar({ onSelect }) {
           <Search
             size={20}
             color="var(--text-muted)"
-            style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
+            style={{ position: 'absolute', left: '1rem', top: '1.1rem', pointerEvents: 'none' }}
           />
-          <input
-            type="text"
+          <textarea
+            ref={textareaRef}
             className="input-field"
             placeholder="Search YouTube or Ask the DJ..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            style={{ paddingLeft: '3rem', paddingRight: '10.5rem' }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSearch(e);
+              }
+            }}
+            rows={1}
+            style={{ 
+              paddingLeft: '3rem', 
+              paddingRight: '10.5rem',
+              resize: 'none',
+              overflowY: query.length > 50 ? 'auto' : 'hidden',
+              minHeight: '3.5rem',
+              lineHeight: '1.5',
+              borderRadius: query.length > 50 ? '24px' : 'var(--border-radius-full)'
+            }}
             autoComplete="off"
           />
-          <div style={{ position: 'absolute', right: '0.25rem', top: '0.25rem', bottom: '0.25rem', display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
+          <div style={{ position: 'absolute', right: '0.25rem', top: '0.25rem', display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
             <button
               type="button"
               onClick={toggleListening}
@@ -175,7 +199,8 @@ export default function SearchBar({ onSelect }) {
               style={{
                 padding: '0 1rem',
                 borderRadius: 'var(--border-radius-full)',
-                fontSize: '0.875rem'
+                fontSize: '0.875rem',
+                height: '3rem'
               }}
               disabled={isSearching || isAskingDJ}
             >

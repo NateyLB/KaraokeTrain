@@ -19,7 +19,7 @@ const useKaraokeStore = create((set, get) => ({
   echoOn: false,
   autoTuneOn: false,
   echoCancellationOn: true,
-  isVideoVisible: false,
+  isVideoVisible: true,
 
   setIsPlaying: (v) => set({ isPlaying: v }),
   setLyricsOffset: (v) => set(state => ({ lyricsOffset: typeof v === 'function' ? v(state.lyricsOffset) : v })),

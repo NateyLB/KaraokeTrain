@@ -1,9 +1,19 @@
 'use client';
+import { useEffect } from 'react';
 import YouTube from 'react-youtube';
 import useKaraokeStore from '../store/useKaraokeStore';
 
 export default function VideoPlayer({ videoId, ytPlayerRef, onStateChange }) {
   const { isPlaying, isVideoVisible } = useKaraokeStore();
+
+  useEffect(() => {
+    // Clear the player reference immediately when the video changes
+    // This prevents other hooks from queueing commands on a dead player proxy
+    // which causes asynchronous crashes inside react-youtube when it flushes the queue
+    if (ytPlayerRef) {
+      ytPlayerRef.current = null;
+    }
+  }, [videoId, ytPlayerRef]);
 
   return (
     <div className="video-container" style={{ display: isVideoVisible ? 'flex' : 'none' }}>
