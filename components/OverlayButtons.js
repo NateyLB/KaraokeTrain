@@ -87,12 +87,14 @@ export default function OverlayButtons({ roomId, showSearchButton = true, contex
               onClick={() => setIsQueueOpen(!isQueueOpen)}
             title="Toggle Queue"
             style={{
-              background: 'var(--glass-bg)', border: '1px solid var(--glass-border)',
+              background: isQueueOpen ? 'var(--secondary-accent)' : 'var(--glass-bg)', 
+              border: `1px solid ${isQueueOpen ? 'var(--secondary-accent)' : 'var(--glass-border)'}`,
               borderRadius: '50%', width: '3rem', height: '3rem',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: 'var(--secondary-accent)', cursor: 'pointer',
+              color: isQueueOpen ? 'white' : 'var(--secondary-accent)', cursor: 'pointer',
               boxShadow: '0 0.25rem 0.75rem rgba(0,0,0,0.3)',
               position: 'relative',
+              transition: 'all 0.2s ease',
             }}
           >
             <Music size={20} />

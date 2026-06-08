@@ -1,5 +1,5 @@
 'use client';
-import { HelpCircle, X, Mic, Music, Volume2, FastForward, Play, Pause, Search, Clock } from 'lucide-react';
+import { HelpCircle, X, Mic, Music, Volume2, FastForward, Play, Pause, Search, Clock, Circle, Smartphone } from 'lucide-react';
 import useKaraokeStore from '../store/useKaraokeStore';
 
 export default function InfoModal({ context = 'room' }) {
@@ -37,10 +37,10 @@ export default function InfoModal({ context = 'room' }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
           <HelpCircle size={28} color="var(--primary-accent)" />
           <h2 className="heading-2" style={{ margin: 0 }}>
-            {context === 'home' ? 'Welcome to Karaok-AI' : 
+            {context === 'home' ? 'Welcome to KaraokeTrain' : 
              context === 'remote' ? 'Remote Queue Guide' : 
              context === 'room-empty' ? 'Searching & Queuing' :
-             'How to use Karaok-AI'}
+             'How to use KaraokeTrain'}
           </h2>
         </div>
 
@@ -158,7 +158,7 @@ export default function InfoModal({ context = 'room' }) {
 
               <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
                 <div style={{ background: 'rgba(255,255,255,0.1)', padding: '0.75rem', borderRadius: '50%' }}>
-                  <Mic size={20} color="#a855f7" />
+                  <Mic size={20} color="#ec4899" />
                 </div>
                 <div>
                   <h3 style={{ fontSize: '1.1rem', marginBottom: '0.25rem', fontWeight: 600 }}>Microphone Panel</h3>
@@ -170,12 +170,36 @@ export default function InfoModal({ context = 'room' }) {
 
               <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
                 <div style={{ background: 'rgba(255,255,255,0.1)', padding: '0.75rem', borderRadius: '50%' }}>
-                  <Music size={20} color="#34d399" />
+                  <Circle size={20} color="#ef4444" />
                 </div>
                 <div>
-                  <h3 style={{ fontSize: '1.1rem', marginBottom: '0.25rem', fontWeight: 600 }}>Remote Queue</h3>
+                  <h3 style={{ fontSize: '1.1rem', marginBottom: '0.25rem', fontWeight: 600 }}>Recording Panel</h3>
                   <p className="body-text" style={{ fontSize: '0.9rem', lineHeight: 1.5, opacity: 0.9 }}>
-                    Friends can join the room on their phones using the room code to search and add songs to the queue without interrupting the singer.
+                    Click the red circle button to open the recording panel. You can start a recording to perfectly capture your singing along with the instrumental track! If you click <strong>Enable Webcam</strong>, it will record a video of you singing too!
+                  </p>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
+                <div style={{ background: 'rgba(255,255,255,0.1)', padding: '0.75rem', borderRadius: '50%' }}>
+                  <Music size={20} color="#ec4899" />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '1.1rem', marginBottom: '0.25rem', fontWeight: 600 }}>Song Queue</h3>
+                  <p className="body-text" style={{ fontSize: '0.9rem', lineHeight: 1.5, opacity: 0.9 }}>
+                    Click the Music note button at the top to view and manage the upcoming song queue. You can reorder songs, skip to a specific song, or remove them entirely.
+                  </p>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
+                <div style={{ background: 'rgba(255,255,255,0.1)', padding: '0.75rem', borderRadius: '50%' }}>
+                  <Smartphone size={20} color="#f59e0b" />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '1.1rem', marginBottom: '0.25rem', fontWeight: 600 }}>Remote Control</h3>
+                  <p className="body-text" style={{ fontSize: '0.9rem', lineHeight: 1.5, opacity: 0.9 }}>
+                    Friends can join the room on their phones using the room code! The mobile remote lets them queue songs, adjust playback, control the microphone effects, and sync the lyrics from anywhere in the room.
                   </p>
                 </div>
               </div>
