@@ -8,6 +8,7 @@ import NowPlayingHeader from '../../../components/NowPlayingHeader';
 import PlayerControls from '../../../components/PlayerControls';
 import VideoPlayer from '../../../components/VideoPlayer';
 import MicrophonePanel from '../../../components/MicrophonePanel';
+import RecordingPanel from '../../../components/RecordingPanel';
 import LoadingScreen from '../../../components/LoadingScreen';
 import OverlayButtons from '../../../components/OverlayButtons';
 import { QrCode } from 'lucide-react';
@@ -168,6 +169,7 @@ export default function RoomPage({ params }) {
       </div>
 
       <MicrophonePanel />
+      <RecordingPanel />
     </div>
   );
 }

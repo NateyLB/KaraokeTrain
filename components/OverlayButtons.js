@@ -1,5 +1,5 @@
 'use client';
-import { Search, Music, HelpCircle, Mic, MicOff } from 'lucide-react';
+import { Search, Music, HelpCircle, Mic, MicOff, Circle } from 'lucide-react';
 import useKaraokeStore from '../store/useKaraokeStore';
 import SongQueue from './SongQueue';
 import InfoModal from './InfoModal';
@@ -9,7 +9,7 @@ import InfoModal from './InfoModal';
  * plus the SongQueue drawer itself.
  */
 export default function OverlayButtons({ roomId, showSearchButton = true, context = 'room' }) {
-  const { partyState, isSearchOpen, setIsSearchOpen, isQueueOpen, setIsQueueOpen, isInfoOpen, setIsInfoOpen, isMicExpanded, setIsMicExpanded, micEnabled } = useKaraokeStore();
+  const { partyState, isSearchOpen, setIsSearchOpen, isQueueOpen, setIsQueueOpen, isInfoOpen, setIsInfoOpen, isMicExpanded, setIsMicExpanded, micEnabled, isRecordingExpanded, setIsRecordingExpanded } = useKaraokeStore();
 
   return (
     <>
@@ -19,8 +19,11 @@ export default function OverlayButtons({ roomId, showSearchButton = true, contex
           {/* 1. Mic Button */}
           {context === 'room' && (
             <button
-              onClick={() => setIsMicExpanded(!isMicExpanded)}
-              title="Microphone Settings"
+              onClick={() => {
+                setIsRecordingExpanded(false);
+                setIsMicExpanded(!isMicExpanded);
+              }}
+              title="Microphone Panel"
               style={{
                 background: micEnabled ? 'rgba(236, 72, 153, 0.9)' : 'var(--glass-bg)', 
                 border: `1px solid ${micEnabled ? 'var(--secondary-accent)' : 'var(--glass-border)'}`,
@@ -34,6 +37,30 @@ export default function OverlayButtons({ roomId, showSearchButton = true, contex
               onMouseLeave={e => !micEnabled && (e.currentTarget.style.color = 'var(--text-muted)')}
             >
               {micEnabled ? <Mic size={20} /> : <MicOff size={20} />}
+            </button>
+          )}
+
+          {/* 1.5 Record Button */}
+          {context === 'room' && (
+            <button
+              onClick={() => {
+                setIsMicExpanded(false);
+                setIsRecordingExpanded(!isRecordingExpanded);
+              }}
+              title="Recording Panel"
+              style={{
+                background: isRecordingExpanded ? 'rgba(239, 68, 68, 0.9)' : 'var(--glass-bg)', 
+                border: `1px solid ${isRecordingExpanded ? '#ef4444' : 'var(--glass-border)'}`,
+                borderRadius: '50%', width: '3rem', height: '3rem',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: isRecordingExpanded ? 'white' : 'var(--text-muted)', cursor: 'pointer',
+                boxShadow: '0 0.25rem 0.75rem rgba(0,0,0,0.3)',
+                transition: 'all 0.2s ease',
+              }}
+              onMouseEnter={e => !isRecordingExpanded && (e.currentTarget.style.color = 'white')}
+              onMouseLeave={e => !isRecordingExpanded && (e.currentTarget.style.color = 'var(--text-muted)')}
+            >
+              <Circle size={20} fill={isRecordingExpanded ? "white" : "none"} />
             </button>
           )}
 

@@ -122,13 +122,21 @@ export function useAudioAnalyzer() {
       streamRef.current = stream;
 
       const AudioContext = window.AudioContext || window.webkitAudioContext;
-      audioContextRef.current = new AudioContext({ latencyHint: 'interactive' });
+      if (!window.__karaokeAudioCtx) {
+        window.__karaokeAudioCtx = new AudioContext({ latencyHint: 'interactive' });
+      }
+      if (!window.__karaokeMediaStreamDest) {
+        window.__karaokeMediaStreamDest = window.__karaokeAudioCtx.createMediaStreamDestination();
+      }
+      
+      audioContextRef.current = window.__karaokeAudioCtx;
       analyzerRef.current = audioContextRef.current.createAnalyser();
       analyzerRef.current.fftSize = 2048;
       analyzerRef.current.smoothingTimeConstant = 0;
 
       const masterMix = audioContextRef.current.createGain();
       masterMix.connect(audioContextRef.current.destination);
+      masterMix.connect(window.__karaokeMediaStreamDest);
 
       gainNodeRef.current = audioContextRef.current.createGain();
       gainNodeRef.current.gain.value = 0.8; // Default to 80% volume

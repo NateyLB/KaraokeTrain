@@ -211,8 +211,14 @@ export function useAudioPlayback(roomId) {
         vocalGain.connect(merger, 0, 0); // L
         vocalGain.connect(merger, 0, 1); // R
 
+        if (!window.__karaokeMediaStreamDest) {
+          window.__karaokeMediaStreamDest = ctx.createMediaStreamDestination();
+        }
+
         // Send to speakers
         merger.connect(ctx.destination);
+        // Send to recording stream
+        merger.connect(window.__karaokeMediaStreamDest);
 
         webAudioNodesRef.current = { instrGain, vocalGain };
       }

@@ -74,6 +74,7 @@ const useKaraokeStore = create((set, get) => ({
   isQueueOpen: false,
   isInfoOpen: false,
   isMicExpanded: false,
+  isRecordingExpanded: false,
   hostUrl: '',
   toast: '',
 
@@ -83,6 +84,7 @@ const useKaraokeStore = create((set, get) => ({
   setIsQueueOpen: (v) => set({ isQueueOpen: v }),
   setIsInfoOpen: (v) => set({ isInfoOpen: v }),
   setIsMicExpanded: (v) => set({ isMicExpanded: v }),
+  setIsRecordingExpanded: (v) => set({ isRecordingExpanded: v }),
   setHostUrl: (v) => set({ hostUrl: v }),
   setToast: (v) => set({ toast: v }),
 
