@@ -80,12 +80,12 @@ export default function MicrophonePanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoTuneOn, isListening, guideNotes, currentSongTime]);
 
-  // === Stop mic when no song or loading ===
+  // === Stop mic when no song is in the queue ===
   useEffect(() => {
-    if (isListening && ((partyState && !partyState.currentSong) || isLoading)) {
+    if (isListening && (partyState && !partyState.currentSong)) {
       stopListening();
     }
-  }, [partyState, isLoading, isListening, stopListening]);
+  }, [partyState, isListening, stopListening]);
 
   // === Panel visibility is controlled entirely by isMicExpanded ===
 

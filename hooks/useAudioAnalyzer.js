@@ -100,21 +100,25 @@ export function useAudioAnalyzer() {
   // Smooth pitch with a small history buffer to reduce jitter
   const pitchHistoryRef = useRef([]);
 
+  const pendingIdRef = useRef(0);
+
   const startListening = async (echoCancellation = true) => {
     try {
-      // Prevent double-start leaks
-      if (streamRef.current) return;
+      // Prevent double-start leaks if already active
+      if (streamRef.current && streamRef.current !== 'pending') return;
+      
+      const currentId = ++pendingIdRef.current;
       streamRef.current = 'pending';
       
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          echoCancellation: echoCancellation,
-          noiseSuppression: echoCancellation,
-          autoGainControl: echoCancellation,
-        },
+          echoCancellation,
+          noiseSuppression: true,
+          autoGainControl: true,
+        }
       });
       
-      if (!isMounted.current || streamRef.current === false) {
+      if (!isMounted.current || streamRef.current === false || pendingIdRef.current !== currentId) {
         stream.getTracks().forEach(t => t.stop());
         return;
       }
@@ -195,7 +199,7 @@ export function useAudioAnalyzer() {
     }
     streamRef.current = false; // Prevents pending getUserMedia from resolving and attaching
     if (sourceRef.current) {
-      sourceRef.current.disconnect();
+      try { sourceRef.current.disconnect(); } catch(e) { console.warn('Failed to disconnect source', e); }
     }
     if (vocoderOscRef.current) {
       try { vocoderOscRef.current.stop(); } catch(e){}
@@ -282,13 +286,20 @@ export function useAudioAnalyzer() {
   const setEchoCancellation = async (echoCancellation) => {
     if (!isListening) return;
     try {
+      const currentId = ++pendingIdRef.current;
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          echoCancellation: echoCancellation,
-          noiseSuppression: echoCancellation,
-          autoGainControl: echoCancellation,
-        },
+          echoCancellation,
+          noiseSuppression: true,
+          autoGainControl: true,
+        }
       });
+
+      if (!isMounted.current || streamRef.current === false || pendingIdRef.current !== currentId) {
+        stream.getTracks().forEach(t => t.stop());
+        return;
+      }
+
       if (streamRef.current && streamRef.current !== 'pending') {
         streamRef.current.getTracks().forEach(t => t.stop());
       }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, use } from 'react';
+import { useEffect, use, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import LyricsDisplay from '../../../components/LyricsDisplay';
 import SearchBar from '../../../components/SearchBar';
@@ -44,8 +44,17 @@ export default function RoomPage({ params }) {
     setDuration, isControlsVisible,
   } = useKaraokeStore();
 
-  // Set hostUrl on mount
-  useEffect(() => { setHostUrl(window.location.host); }, []);
+  // Synchronously reset sensitive states when entering a new room
+  const lastRoomRef = useRef(null);
+  if (lastRoomRef.current !== roomId) {
+    lastRoomRef.current = roomId;
+    useKaraokeStore.getState().setMicEnabled(false);
+    useKaraokeStore.getState().setIsRecording(false);
+  }
+
+  useEffect(() => { 
+    setHostUrl(window.location.host); 
+  }, [roomId, setHostUrl]);
 
   // === Queue handler ===
   const handleQueueSong = async (track) => {
