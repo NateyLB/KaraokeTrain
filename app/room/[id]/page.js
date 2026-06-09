@@ -80,7 +80,7 @@ export default function RoomPage({ params }) {
       <div style={{ display: 'flex', height: '100dvh', padding: 'clamp(1rem, 5vw, 2rem)', paddingTop: '5rem', position: 'relative', width: '100%', maxWidth: '100vw', boxSizing: 'border-box', overflow: 'hidden' }}>
         <style>{`
           .empty-state-wrapper { flex: 1; display: flex; flex-direction: column; align-items: center; min-width: 0; width: 100%; height: 100%; }
-          .empty-state-search { max-width: 40rem; width: 100%; margin-bottom: 1rem; text-align: center; display: flex; flex-direction: column; flex: 1; min-height: 0; }
+          .empty-state-search { max-width: 40rem; width: 100%; margin-bottom: 1rem; text-align: left; display: flex; flex-direction: column; flex: 1; min-height: 0; }
           .room-badge {
             display: flex;
             position: fixed;
@@ -143,7 +143,7 @@ export default function RoomPage({ params }) {
     <div className="karaoke-layout" style={{ display: 'flex', flexDirection: 'column', height: '100dvh', width: '100vw', paddingTop: '1rem', position: 'fixed', top: 0, left: 0, paddingBottom: '0', boxSizing: 'border-box', overflow: 'hidden' }}>
       <style>{`
         .main-content-area { display: flex; flex-direction: column; flex: 1; min-height: 0; width: 100%; margin-top: 3.5rem; }
-        .controls-area { display: flex; flex-direction: column; width: 100%; align-items: center; gap: 1rem; margin-bottom: 0; }
+        .controls-area { display: flex; flex-direction: column; width: 100%; align-items: center; gap: 1rem; margin-bottom: 1rem; }
         .video-container { width: 100%; max-width: 900px; margin: 0 auto 0 auto; padding: 0 2.5rem; }
         .lyrics-container { flex: 1; display: flex; flex-direction: column; min-height: 0; position: relative; width: 100%; }
         @media (min-width: 768px) {

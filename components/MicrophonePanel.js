@@ -90,28 +90,35 @@ export default function MicrophonePanel() {
   // === Panel visibility is controlled entirely by isMicExpanded ===
 
   return (
-    <div 
-      style={{
-        position: 'fixed',
-        top: '4.5rem',
-        right: '1rem',
-        background: 'rgba(20, 20, 25, 0.95)',
-        backdropFilter: 'blur(20px)',
-        border: `1px solid ${isListening ? 'var(--secondary-accent)' : 'var(--glass-border)'}`,
-        borderRadius: '1rem',
-        padding: '1rem',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '0.75rem',
-        boxShadow: '0 1rem 3rem rgba(0,0,0,0.5)',
-        zIndex: 49,
-        minWidth: '240px',
-        width: 'max-content',
-        opacity: isMicExpanded ? 1 : 0,
-        transform: isMicExpanded ? 'translateY(0)' : 'translateY(-10px)',
-        pointerEvents: isMicExpanded ? 'auto' : 'none',
-        transition: 'all 0.2s cubic-bezier(0.25, 1, 0.5, 1)'
-    }}>
+    <>
+      <style dangerouslySetInnerHTML={{ __html: `
+        .mic-panel { top: 7.5rem !important; }
+        @media (min-width: 768px) {
+          .mic-panel { top: 4rem !important; }
+        }
+      `}} />
+      <div 
+        className="mic-panel"
+        style={{
+          position: 'fixed',
+          right: '1rem',
+          background: 'rgba(20, 20, 25, 0.95)',
+          backdropFilter: 'blur(20px)',
+          border: `1px solid ${isListening ? 'var(--secondary-accent)' : 'var(--glass-border)'}`,
+          borderRadius: '1rem',
+          padding: '1rem',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '0.75rem',
+          boxShadow: '0 1rem 3rem rgba(0,0,0,0.5)',
+          zIndex: 49,
+          minWidth: '240px',
+          width: 'max-content',
+          opacity: isMicExpanded ? 1 : 0,
+          transform: isMicExpanded ? 'translateY(0)' : 'translateY(-10px)',
+          pointerEvents: isMicExpanded ? 'auto' : 'none',
+          transition: 'all 0.2s cubic-bezier(0.25, 1, 0.5, 1)'
+      }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                        <button
@@ -240,5 +247,6 @@ export default function MicrophonePanel() {
           </p>
         )}
     </div>
+    </>
   );
 }
