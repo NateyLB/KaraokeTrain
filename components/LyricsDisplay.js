@@ -14,8 +14,17 @@ export default function LyricsDisplay({ lyrics, currentTime }) {
     let bestIdx = -1;
     let maxTime = -1;
     for (let i = 0; i < lyrics.length; i++) {
-      if (currentTime >= lyrics[i].time && lyrics[i].time >= maxTime) {
-        maxTime = lyrics[i].time;
+      let lineStartTime = lyrics[i].time;
+      const activeWords = lyrics[i].words || [];
+      
+      // Use the actual start time of the first word
+      if (activeWords.length > 0 && activeWords[0].start != null) {
+          lineStartTime = activeWords[0].start;
+      }
+      
+      // Activate the line slightly before the first word (0.3s) so it doesn't pop in already-highlighting
+      if (currentTime >= (lineStartTime - 0.3) && lineStartTime >= maxTime) {
+        maxTime = lineStartTime;
         bestIdx = i;
       }
     }
@@ -93,7 +102,7 @@ export default function LyricsDisplay({ lyrics, currentTime }) {
       `}</style>
       <div 
         ref={containerRef}
-        className="lyrics-container lyric-box"
+        className="lyric-box"
         style={{
           boxSizing: 'border-box',
           overflow: 'hidden', // Disable native scroll, we use CSS transforms
@@ -126,15 +135,10 @@ export default function LyricsDisplay({ lyrics, currentTime }) {
           let activeWords = line.words || [];
           
           if (activeWords.length > 0 && activeWords[0].start != null && activeWords[activeWords.length - 1].end != null) {
-              // SANITY CHECK: If Whisper's alignment is wildly disconnected from the official LRCLIB timestamp,
-              // it means Whisper hallucinated or aligned to the wrong phrase. We throw away the bad Whisper data
-              // and fall back to perfectly-anchored synthetic highlighting for this specific line.
-              if (Math.abs(activeWords[0].start - line.time) > 2.0) {
-                  activeWords = [];
-              } else {
-                  trueStartTime = activeWords[0].start;
-                  trueEndTime = activeWords[activeWords.length - 1].end;
-              }
+              // The backend Python script has already validated and cleaned the word timestamps.
+              // We fully trust them, even if they drastically differ from the studio line.time (e.g. for Live versions).
+              trueStartTime = activeWords[0].start;
+              trueEndTime = activeWords[activeWords.length - 1].end;
           }
           
           const duration = trueEndTime - trueStartTime;
@@ -170,12 +174,15 @@ export default function LyricsDisplay({ lyrics, currentTime }) {
                   <span 
                     key={wIdx} 
                     style={{
-                      backgroundImage: `linear-gradient(to right, #ffffff ${wordProgress}%, var(--primary-accent) ${wordProgress}%)`,
-                      WebkitBackgroundClip: 'text',
-                      backgroundClip: 'text',
+                      backgroundImage: `linear-gradient(to right, #ffffff, #ffffff), linear-gradient(to right, var(--primary-accent), var(--primary-accent))`,
+                      backgroundRepeat: 'no-repeat, no-repeat',
+                      backgroundPosition: '0 0, 0 0',
+                      backgroundSize: `${wordProgress}% 100%, 100% 100%`,
+                      WebkitBackgroundClip: 'text, text',
+                      backgroundClip: 'text, text',
                       WebkitTextFillColor: 'transparent',
                       color: 'transparent',
-                      transition: isSinging ? 'none' : 'background 0.1s linear',
+                      transition: isSinging ? 'background-size 0.05s linear' : 'none',
                       display: 'inline'
                     }}
                   >

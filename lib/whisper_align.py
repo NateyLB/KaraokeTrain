@@ -206,68 +206,51 @@ def main():
                     curr_time += w_durs[k]
             else:
                 # DELETE: Whisper completely missed these words.
-                if lrclib_line_times:
-                    # Anchor perfectly to official LRCLIB timestamps
-                    for k, w_text in enumerate(lrclib_words_flat[i1:i2]):
-                        line_idx = word_to_line[i1 + k]
-                        target_time = lrclib_line_times[line_idx]
-                        
-                        words_before = sum(1 for prev_k in range(k) if word_to_line[i1 + prev_k] == line_idx)
-                        
-                        dur = min(1.0, 0.1 * len(w_text) + 0.2)
-                        start_time = target_time + (words_before * 0.4)
-                        
-                        if mapped_flat_words:
-                            start_time = max(start_time, mapped_flat_words[-1]["end"] + 0.01)
-                            
-                        if j2 < len(whisper_words_flat):
-                            next_valid_start = whisper_words_flat[j2]["start"]
-                            if start_time + dur > next_valid_start:
-                                dur = max(0.1, next_valid_start - start_time - 0.01)
-                                
-                        mapped_flat_words.append({
-                            "word": w_text,
-                            "start": start_time,
-                            "end": start_time + dur,
-                            "line_idx": line_idx
-                        })
+                # Find available time boundaries
+                if not mapped_flat_words:
+                    block_start = 0.0
                 else:
-                    # Fallback to extrapolation if no LRCLIB timestamps
-                    if not mapped_flat_words:
-                        block_start = 0.0
-                    else:
-                        block_start = mapped_flat_words[-1]["end"]
-                        
-                    extrapolated_end = block_start + 0.3 * (i2 - i1)
-                    if j2 < len(whisper_words_flat):
-                        next_valid_start = whisper_words_flat[j2]["start"]
-                        block_end = min(extrapolated_end, next_valid_start - 0.01)
-                    else:
-                        block_end = extrapolated_end
-                        
-                    block_end = max(block_start + 0.01, block_end)
-                    block_duration = block_end - block_start
-                    block_lrclib = lrclib_words_flat[i1:i2]
+                    block_start = mapped_flat_words[-1]["end"]
                     
-                    total_chars = sum(len(w) for w in block_lrclib)
-                    w_durs = []
-                    for w_text in block_lrclib:
-                        dur = (len(w_text) / total_chars) * block_duration if total_chars > 0 else 0.3
-                        dur = min(dur, 0.1 * len(w_text) + 0.2)
-                        w_durs.append(dur)
+                if lrclib_line_times:
+                    # Prefer official line start if it's safe to use
+                    first_word_line = word_to_line[i1]
+                    target_time = lrclib_line_times[first_word_line]
+                    if target_time > block_start:
+                        block_start = target_time
                         
-                    total_w_dur = sum(w_durs)
-                    curr_time = block_end - total_w_dur
-                    curr_time = max(block_start, curr_time)
+                extrapolated_end = block_start + 0.3 * (i2 - i1)
+                
+                if j2 < len(whisper_words_flat):
+                    next_valid_start = whisper_words_flat[j2]["start"]
+                    block_end = min(extrapolated_end, next_valid_start - 0.01)
+                else:
+                    block_end = extrapolated_end
                     
-                    for k, w_text in enumerate(block_lrclib):
-                        mapped_flat_words.append({
-                            "word": w_text, 
-                            "start": curr_time, 
-                            "end": curr_time + w_durs[k], 
-                            "line_idx": word_to_line[i1 + k]
-                        })
-                        curr_time += w_durs[k]
+                block_end = max(block_start + 0.01, block_end)
+                block_duration = block_end - block_start
+                block_lrclib = lrclib_words_flat[i1:i2]
+                
+                total_chars = sum(len(w) for w in block_lrclib)
+                w_durs = []
+                for w_text in block_lrclib:
+                    dur = (len(w_text) / total_chars) * block_duration if total_chars > 0 else 0.3
+                    dur = min(dur, 0.1 * len(w_text) + 0.2)
+                    w_durs.append(dur)
+                    
+                total_w_dur = sum(w_durs)
+                curr_time = block_end - total_w_dur
+                curr_time = max(block_start, curr_time)
+                
+                for k, w_text in enumerate(block_lrclib):
+                    mapped_flat_words.append({
+                        "word": w_text, 
+                        "start": curr_time, 
+                        "end": curr_time + w_durs[k], 
+                        "line_idx": word_to_line[i1 + k]
+                    })
+                    curr_time += w_durs[k]
+
                 
     # Enforce strictly monotonic timestamps to prevent UI glitching/overlapping words
     if mapped_flat_words:
