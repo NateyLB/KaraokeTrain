@@ -154,7 +154,7 @@ export default function RoomPage({ params }) {
             .main-content-area { flex-direction: row; padding: 0 1rem; gap: 1rem; align-items: stretch; }
             .video-container { flex: 1; max-width: none; margin: 0; padding: 0; display: flex; flex-direction: column; justify-content: center; }
             .lyrics-container { flex: 1; margin-top: 0 !important; justify-content: center; align-items: center; }
-            .controls-area { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(10, 10, 15, 0.95); backdrop-filter: blur(20px); border-top: 1px solid var(--glass-border); padding: 0.5rem 1rem; z-index: 40; flex-direction: column; justify-content: center; align-items: center; gap: 0.5rem; margin-bottom: 0; }
+            .controls-area { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(10, 10, 15, 0.95); backdrop-filter: blur(20px); border-top: 1px solid var(--glass-border); padding: 0.5rem 1rem 1rem 1rem; z-index: 40; flex-direction: column; justify-content: center; align-items: center; gap: 0.5rem; margin-bottom: 0; }
             .controls-area button { padding: 0.4rem 0.8rem !important; font-size: 0.8rem !important; }
             .control-buttons-row { flex-wrap: wrap !important; gap: 0.5rem !important; margin-bottom: 0 !important; justify-content: center; width: 100%; }
             .seekbar-row { width: 100%; max-width: 800px; padding: 0 !important; margin: 0 !important; }
