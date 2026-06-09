@@ -35,20 +35,32 @@ export default function SongQueue({ roomId }) {
 
   if (!isQueueOpen) return null;
 
+  const currentProcessingSong = partyState?.currentSong && ['pending', 'processing', 'error'].includes(partyState.currentSong.jobStatus?.status) 
+    ? partyState.currentSong 
+    : null;
+    
+  const displayQueue = currentProcessingSong 
+    ? [currentProcessingSong, ...(partyState?.queue || [])] 
+    : (partyState?.queue || []);
+
   return (
     <div className="animate-fade-in" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'rgba(10, 10, 15, 0.95)', backdropFilter: 'blur(20px)', borderTop: '1px solid var(--glass-border)', padding: '1.5rem 2rem', borderTopLeftRadius: '1.25rem', borderTopRightRadius: '1.25rem', maxHeight: '50vh', overflowY: 'auto', zIndex: 60, boxShadow: '0 -0.5rem 2rem rgba(0,0,0,0.4)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
         <h3 className="heading-2" style={{ fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
             <Music size={18} color="var(--secondary-accent)" /> 
-            Up Next {partyState?.queue?.length > 0 ? `(${partyState.queue.length})` : ''}
+            Up Next {displayQueue.length > 0 ? `(${displayQueue.length})` : ''}
         </h3>
         <button onClick={() => setIsQueueOpen(false)} style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', borderRadius: '50%', color: 'white', cursor: 'pointer', padding: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={16} /></button>
       </div>
-      {(!partyState?.queue || partyState.queue.length === 0) ? (
+      {displayQueue.length === 0 ? (
           <p className="body-text" style={{ opacity: 0.5, fontSize: '0.9rem' }}>Queue is empty.</p>
       ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              {partyState.queue.map((qSong, i) => (
+              {displayQueue.map((qSong, i) => {
+                  const isProcessingSong = currentProcessingSong && i === 0;
+                  const originalIndex = isProcessingSong ? -1 : (currentProcessingSong ? i - 1 : i);
+                  
+                  return (
                   <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'rgba(255,255,255,0.05)', padding: '0.75rem', borderRadius: '0.5rem' }}>
                       <span style={{ opacity: 0.3, fontSize: '0.9rem', fontWeight: 'bold', width: '1.25rem' }}>{i + 1}</span>
                       {qSong.art ? (
@@ -73,23 +85,31 @@ export default function SongQueue({ roomId }) {
                          )}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                         {qSong.jobStatus?.status === 'ready' && (
-                           <button onClick={() => handlePlayNow(i)} style={{ background: 'none', border: 'none', color: '#4ade80', cursor: 'pointer', padding: '0.25rem', marginRight: '0.25rem' }} title="Play Now">
+                         {qSong.jobStatus?.status === 'ready' && !isProcessingSong && (
+                           <button onClick={() => handlePlayNow(originalIndex)} style={{ background: 'none', border: 'none', color: '#4ade80', cursor: 'pointer', padding: '0.25rem', marginRight: '0.25rem' }} title="Play Now">
                                <Play size={18} />
                            </button>
                          )}
-                         <button onClick={() => handleReorderSong(i, i - 1)} disabled={i === 0} style={{ background: 'none', border: 'none', color: i === 0 ? 'rgba(255,255,255,0.1)' : 'white', cursor: i === 0 ? 'default' : 'pointer', padding: '0.25rem' }}>
+                         <button onClick={() => handleReorderSong(originalIndex, originalIndex - 1)} disabled={isProcessingSong || originalIndex === 0} style={{ background: 'none', border: 'none', color: (isProcessingSong || originalIndex === 0) ? 'rgba(255,255,255,0.1)' : 'white', cursor: (isProcessingSong || originalIndex === 0) ? 'default' : 'pointer', padding: '0.25rem' }}>
                              <ChevronUp size={20} />
                          </button>
-                         <button onClick={() => handleReorderSong(i, i + 1)} disabled={i === partyState.queue.length - 1} style={{ background: 'none', border: 'none', color: i === partyState.queue.length - 1 ? 'rgba(255,255,255,0.1)' : 'white', cursor: i === partyState.queue.length - 1 ? 'default' : 'pointer', padding: '0.25rem' }}>
+                         <button onClick={() => handleReorderSong(originalIndex, originalIndex + 1)} disabled={isProcessingSong || originalIndex === partyState.queue.length - 1} style={{ background: 'none', border: 'none', color: (isProcessingSong || originalIndex === partyState.queue.length - 1) ? 'rgba(255,255,255,0.1)' : 'white', cursor: (isProcessingSong || originalIndex === partyState.queue.length - 1) ? 'default' : 'pointer', padding: '0.25rem' }}>
                              <ChevronDown size={20} />
                          </button>
-                         <button onClick={() => handleRemoveSong(i)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '0.25rem', marginLeft: '0.5rem' }}>
+                         <button onClick={() => {
+                             if (isProcessingSong) {
+                                 // Call 'next' to remove current processing song
+                                 fetch('/api/party', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'next', id: roomId }) });
+                             } else {
+                                 handleRemoveSong(originalIndex);
+                             }
+                         }} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '0.25rem', marginLeft: '0.5rem' }}>
                              <Trash2 size={18} />
                          </button>
                       </div>
                   </div>
-              ))}
+                  );
+              })}
           </div>
       )}
     </div>

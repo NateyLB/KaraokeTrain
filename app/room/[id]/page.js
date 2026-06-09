@@ -70,9 +70,12 @@ export default function RoomPage({ params }) {
   };
 
   const song = partyState?.currentSong;
+  
+  const jobStatus = partyState?.currentSong?.jobStatus?.status;
+  const isCurrentSongNotReady = partyState?.currentSong && (jobStatus === 'pending' || jobStatus === 'processing' || jobStatus === 'error');
 
   // === EMPTY STATE ===
-  if (!partyState || !partyState.currentSong) {
+  if (!partyState || !partyState.currentSong || isCurrentSongNotReady) {
     return (
       <div style={{ display: 'flex', height: '100dvh', padding: 'clamp(1rem, 5vw, 2rem)', paddingTop: '5rem', position: 'relative', width: '100%', maxWidth: '100vw', boxSizing: 'border-box', overflow: 'hidden' }}>
         <style>{`
@@ -122,7 +125,11 @@ export default function RoomPage({ params }) {
         <div className="empty-state-wrapper">
           <div className="empty-state-search">
             <h3 className="heading-2" style={{ fontSize: '1.2rem', marginBottom: '1rem', color: 'var(--text-muted)', flexShrink: 0 }}>
-              {partyState?.queue?.length > 0 ? "Song processing! Add more to the queue" : "Search for a song to begin"}
+              {jobStatus === 'error' ? 
+                <span style={{color: '#ef4444'}}>Processing failed. Please try another song.</span> :
+               (isCurrentSongNotReady || partyState?.queue?.length > 0) ? 
+                "Song processing! Add more to the queue" : 
+                "Search for a song to begin"}
             </h3>
             <SearchBar onSelect={handleQueueSong} />
           </div>

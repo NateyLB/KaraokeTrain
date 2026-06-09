@@ -11,6 +11,9 @@ import InfoModal from './InfoModal';
 export default function OverlayButtons({ roomId, showSearchButton = true, context = 'room' }) {
   const { partyState, isSearchOpen, setIsSearchOpen, isQueueOpen, setIsQueueOpen, isInfoOpen, setIsInfoOpen, isMicExpanded, setIsMicExpanded, micEnabled, isRecordingExpanded, setIsRecordingExpanded, isRecording, isControlsVisible, setIsControlsVisible } = useKaraokeStore();
 
+  const currentProcessingSong = partyState?.currentSong && ['pending', 'processing', 'error'].includes(partyState.currentSong.jobStatus?.status);
+  const displayQueueLength = (partyState?.queue?.length || 0) + (currentProcessingSong ? 1 : 0);
+
   return (
     <>
       {!isSearchOpen && (
@@ -122,7 +125,7 @@ export default function OverlayButtons({ roomId, showSearchButton = true, contex
             onMouseLeave={e => !isQueueOpen && (e.currentTarget.style.color = 'var(--text-muted)')}
           >
             <Music size={20} />
-            {partyState?.queue?.length > 0 && (
+            {displayQueueLength > 0 && (
               <div style={{
                 position: 'absolute', top: '-4px', right: '-4px',
                 background: 'var(--primary-accent)', color: 'white',
@@ -130,7 +133,7 @@ export default function OverlayButtons({ roomId, showSearchButton = true, contex
                 width: '20px', height: '20px', borderRadius: '50%',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
-                {partyState.queue.length}
+                {displayQueueLength}
               </div>
             )}
           </button>
