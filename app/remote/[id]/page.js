@@ -86,7 +86,7 @@ export default function RemotePage({ params }) {
   };
 
   return (
-    <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '2rem', minHeight: '100vh', paddingBottom: '100px', position: 'relative' }}>
+    <div style={{ padding: '1rem', paddingTop: '5rem', display: 'flex', flexDirection: 'column', gap: '2rem', minHeight: '100vh', paddingBottom: '100px', position: 'relative', width: '100%', maxWidth: '100vw', boxSizing: 'border-box', overflowX: 'hidden' }}>
       
       {/* Remote Context Info Toggle */}
       <OverlayButtons roomId={roomId} context="remote" showSearchButton={false} />

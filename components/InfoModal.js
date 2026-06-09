@@ -113,6 +113,18 @@ export default function InfoModal({ context = 'room' }) {
                   </p>
                 </div>
               </div>
+
+              <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
+                <div style={{ background: 'rgba(255,255,255,0.1)', padding: '0.75rem', borderRadius: '50%' }}>
+                  <Music size={20} color="#ec4899" />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '1.1rem', marginBottom: '0.25rem', fontWeight: 600 }}>Song Queue</h3>
+                  <p className="body-text" style={{ fontSize: '0.9rem', lineHeight: 1.5, opacity: 0.9 }}>
+                    Click the Music note button at the top to view and manage the upcoming song queue. You can reorder songs, skip to a specific song, or remove them entirely.
+                  </p>
+                </div>
+              </div>
             </>
           )}
 

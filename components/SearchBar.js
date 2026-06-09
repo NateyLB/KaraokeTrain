@@ -5,6 +5,7 @@ import { Search, Music2, ChevronRight, Music, Sparkles, Mic } from 'lucide-react
 import useKaraokeStore from '../store/useKaraokeStore';
 
 export default function SearchBar({ onSelect }) {
+  const { partyState } = useKaraokeStore();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -15,15 +16,7 @@ export default function SearchBar({ onSelect }) {
   const [catalog, setCatalog] = useState([]);
   const [isLoadingCatalog, setIsLoadingCatalog] = useState(true);
   const recognitionRef = useRef(null);
-  const textareaRef = useRef(null);
-
-  // Auto-resize textarea
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 150)}px`;
-    }
-  }, [query]);
+  const inputRef = useRef(null);
 
   // Fetch catalog on mount
   useEffect(() => {
@@ -162,35 +155,36 @@ export default function SearchBar({ onSelect }) {
       <form onSubmit={(e) => handleSearch(e)} style={{ position: 'relative' }}>
         <div style={{ position: 'relative' }}>
           <Search
-            size={20}
+            size={18}
             color="var(--text-muted)"
-            style={{ position: 'absolute', left: '1rem', top: '1.1rem', pointerEvents: 'none' }}
+            style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', zIndex: 5 }}
           />
-          <textarea
-            ref={textareaRef}
+          <input
+            type="text"
+            ref={inputRef}
             className="input-field"
-            placeholder="Search YouTube or Ask the DJ..."
+            placeholder="Search or ask the DJ..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
+              if (e.key === 'Enter') {
                 e.preventDefault();
                 handleSearch(e);
               }
             }}
-            rows={1}
-            style={{ 
-              paddingLeft: '3rem', 
-              paddingRight: '10.5rem',
-              resize: 'none',
-              overflowY: query.length > 50 ? 'auto' : 'hidden',
-              minHeight: '3.5rem',
-              lineHeight: '1.5',
-              borderRadius: query.length > 50 ? '24px' : 'var(--border-radius-full)'
+            style={{
+              width: '100%',
+              padding: '0 5.5rem 0 2.5rem',
+              background: 'rgba(255, 255, 255, 0.05)',
+              border: '1px solid var(--glass-border)',
+              borderRadius: '24px',
+              color: 'var(--text-main)',
+              fontSize: '0.95rem',
+              height: '2.75rem',
             }}
             autoComplete="off"
           />
-          <div style={{ position: 'absolute', right: '0.25rem', top: '0.25rem', display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
+          <div style={{ position: 'absolute', right: '0.25rem', top: '50%', transform: 'translateY(-50%)', display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
             <button
               type="button"
               onClick={toggleListening}
@@ -199,7 +193,9 @@ export default function SearchBar({ onSelect }) {
                 border: 'none',
                 color: isListening ? '#ef4444' : 'var(--text-muted)',
                 cursor: 'pointer',
-                padding: '0.5rem',
+                padding: '0',
+                width: '2.25rem',
+                height: '2.25rem',
                 borderRadius: '50%',
                 display: 'flex',
                 alignItems: 'center',
@@ -209,7 +205,7 @@ export default function SearchBar({ onSelect }) {
               }}
               title="Voice Search"
             >
-              <Mic size={20} />
+              <Mic size={18} />
             </button>
             <button
               type="submit"
@@ -217,8 +213,9 @@ export default function SearchBar({ onSelect }) {
               style={{
                 padding: '0 1rem',
                 borderRadius: 'var(--border-radius-full)',
-                fontSize: '0.875rem',
-                height: '3rem'
+                fontSize: '0.85rem',
+                height: '2.25rem',
+                border: 'none'
               }}
               disabled={isSearching || isAskingDJ}
             >
@@ -234,8 +231,8 @@ export default function SearchBar({ onSelect }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', paddingLeft: '0.5rem' }}>
               <Music2 size={18} color="var(--primary-accent)" />
               <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-main)', margin: 0 }}>Ready to Sing</h3>
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginLeft: 'auto' }}>
-                {isLoadingCatalog ? 'Loading...' : `${catalog.length} songs`}
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginLeft: 'auto', display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                <span>{isLoadingCatalog ? 'Loading...' : `${catalog.length} songs`}</span>
               </span>
             </div>
             

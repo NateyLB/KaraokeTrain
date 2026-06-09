@@ -38,7 +38,7 @@ export default function RoomPage({ params }) {
   });
 
   const {
-    partyState, stems, isLoading, isVideoVisible,
+    partyState, stems, isVideoVisible,
     currentSongTime, lyricsOffset, parsedLyrics, lyricsSource,
     isSearchOpen, setIsSearchOpen, hostUrl, setHostUrl,
     setDuration, isControlsVisible,
@@ -72,36 +72,60 @@ export default function RoomPage({ params }) {
   const song = partyState?.currentSong;
 
   // === EMPTY STATE ===
-  if (!partyState || (!partyState.currentSong && !isLoading)) {
+  if (!partyState || !partyState.currentSong) {
     return (
-      <div style={{ display: 'flex', minHeight: '100vh', padding: '2rem', position: 'relative' }}>
+      <div style={{ display: 'flex', height: '100dvh', padding: 'clamp(1rem, 5vw, 2rem)', paddingTop: '5rem', position: 'relative', width: '100%', maxWidth: '100vw', boxSizing: 'border-box', overflow: 'hidden' }}>
+        <style>{`
+          .empty-state-wrapper { flex: 1; display: flex; flex-direction: column; align-items: center; min-width: 0; width: 100%; height: 100%; }
+          .empty-state-search { max-width: 40rem; width: 100%; margin-bottom: 1rem; text-align: center; display: flex; flex-direction: column; flex: 1; min-height: 0; }
+          .room-badge {
+            display: flex;
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            background: rgba(139, 92, 246, 0.15);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            backdrop-filter: blur(16px);
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            z-index: 50;
+            align-items: center;
+            column-gap: 0.8rem;
+            row-gap: 0.1rem;
+            color: var(--text-main);
+            font-size: 0.85rem;
+            max-width: calc(100vw - 140px);
+            flex-wrap: wrap;
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.1);
+          }
+          .join-text {
+            opacity: 0.8;
+            font-size: 0.75rem;
+          }
+          @media (min-width: 768px) {
+            .join-text {
+              border-left: 1px solid rgba(255,255,255,0.2);
+              padding-left: 0.8rem;
+            }
+          }
+        `}</style>
         <OverlayButtons roomId={roomId} showSearchButton={false} context="room-empty" />
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <div style={{ maxWidth: '40rem', width: '100%', marginBottom: '2rem', textAlign: 'center', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, maxHeight: '80vh' }}>
-            <h3 className="heading-2" style={{ fontSize: '1.2rem', marginBottom: '1rem', color: 'var(--text-muted)', flexShrink: 0 }}>Search for a song to begin</h3>
-            <SearchBar onSelect={handleQueueSong} />
+        <div className="room-badge">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', whiteSpace: 'nowrap' }}>
+            <span style={{ opacity: 0.7 }}>Room:</span>
+            <span style={{ color: 'var(--primary-accent)', fontWeight: '700', letterSpacing: '1px' }}>{roomId}</span>
           </div>
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', width: '100%' }}>
-            <QrCode size={120} color="var(--primary-accent)" style={{ opacity: 0.8, marginBottom: '2rem' }} />
-            <h2 className="heading-1 text-gradient" style={{ fontSize: 'clamp(2.5rem, 10vw, 4rem)', letterSpacing: 'clamp(0.2rem, 2vw, 0.5rem)', marginBottom: '1rem', wordBreak: 'break-all' }}>{roomId}</h2>
-            <p className="body-text" style={{ fontSize: 'clamp(1rem, 4vw, 1.5rem)', opacity: 0.8, marginBottom: '3rem', wordBreak: 'break-word', padding: '0 1rem' }}>Join at <b>{hostUrl}/remote/{roomId}</b> to add songs!</p>
+          <div className="join-text">
+            Join: <b>{hostUrl}/remote/{roomId}</b>
           </div>
         </div>
-      </div>
-    );
-  }
-
-  // === LOADING STATE ===
-  if (isLoading) {
-    return (
-      <div style={{ display: 'flex', minHeight: '100vh', padding: '2rem', position: 'relative' }}>
-        <OverlayButtons roomId={roomId} showSearchButton={false} />
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <div style={{ maxWidth: '40rem', width: '100%', marginBottom: '2rem', textAlign: 'center', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, maxHeight: '80vh' }}>
-            <h3 className="heading-2" style={{ fontSize: '1.2rem', marginBottom: '1rem', color: 'var(--text-muted)', flexShrink: 0 }}>Search to add more songs to the queue</h3>
+        <div className="empty-state-wrapper">
+          <div className="empty-state-search">
+            <h3 className="heading-2" style={{ fontSize: '1.2rem', marginBottom: '1rem', color: 'var(--text-muted)', flexShrink: 0 }}>
+              {partyState?.queue?.length > 0 ? "Song processing! Add more to the queue" : "Search for a song to begin"}
+            </h3>
             <SearchBar onSelect={handleQueueSong} />
           </div>
-          <LoadingScreen />
         </div>
       </div>
     );
