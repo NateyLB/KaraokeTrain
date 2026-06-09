@@ -17,7 +17,7 @@ export default function OverlayButtons({ roomId, showSearchButton = true, contex
   return (
     <>
       {!isSearchOpen && (
-        <div style={{ position: 'fixed', top: '1rem', right: '1rem', zIndex: 50, display: 'flex', gap: '0.5rem' }}>
+        <div className="overlay-buttons-container" style={{ position: 'fixed', right: '1rem', zIndex: 50, display: 'flex', gap: '0.5rem' }}>
           
           {/* 0. Toggle Playback Controls */}
           {context === 'room' && (

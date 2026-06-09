@@ -277,3 +277,8 @@ input[type="number"] {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+.overlay-buttons-container { top: 4.5rem; }
+@media (min-width: 768px) {
+  .overlay-buttons-container { top: 1rem; }
+}

@@ -140,17 +140,20 @@ export default function RoomPage({ params }) {
 
   // === MAIN KARAOKE VIEW ===
   return (
-    <div className="karaoke-layout" style={{ display: 'flex', flexDirection: 'column', height: '100dvh', width: '100vw', paddingTop: '1rem', position: 'fixed', top: 0, left: 0, paddingBottom: '1rem', boxSizing: 'border-box', overflow: 'hidden' }}>
+    <div className="karaoke-layout" style={{ display: 'flex', flexDirection: 'column', height: '100dvh', width: '100vw', paddingTop: '1rem', position: 'fixed', top: 0, left: 0, paddingBottom: '0', boxSizing: 'border-box', overflow: 'hidden' }}>
       <style>{`
-        .main-content-area { display: flex; flex-direction: column; flex: 1; min-height: 0; width: 100%; }
-        .controls-area { display: flex; flex-direction: column; width: 100%; align-items: center; gap: 1rem; margin-bottom: 1rem; }
-        .video-container { width: 100%; max-width: 900px; margin: 0 auto 1rem auto; padding: 0 2rem; }
+        .main-content-area { display: flex; flex-direction: column; flex: 1; min-height: 0; width: 100%; margin-top: 3.5rem; }
+        .controls-area { display: flex; flex-direction: column; width: 100%; align-items: center; gap: 1rem; margin-bottom: 0; }
+        .video-container { width: 100%; max-width: 900px; margin: 0 auto 0 auto; padding: 0 2.5rem; }
         .lyrics-container { flex: 1; display: flex; flex-direction: column; min-height: 0; position: relative; width: 100%; }
+        @media (min-width: 768px) {
+            .main-content-area { margin-top: 0; }
+        }
         @media (orientation: landscape) and (min-width: 600px) and (max-width: 1024px) {
             .karaoke-layout { padding-bottom: ${isControlsVisible ? '8rem' : '1rem'} !important; }
             .main-content-area { flex-direction: row; padding: 0 1rem; gap: 1rem; align-items: stretch; }
             .video-container { flex: 1; max-width: none; margin: 0; padding: 0; display: flex; flex-direction: column; justify-content: center; }
-            .lyrics-container { flex: 1; margin-top: 0 !important; }
+            .lyrics-container { flex: 1; margin-top: 0 !important; justify-content: center; align-items: center; }
             .controls-area { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(10, 10, 15, 0.95); backdrop-filter: blur(20px); border-top: 1px solid var(--glass-border); padding: 0.5rem 1rem; z-index: 40; flex-direction: column; justify-content: center; align-items: center; gap: 0.5rem; margin-bottom: 0; }
             .controls-area button { padding: 0.4rem 0.8rem !important; font-size: 0.8rem !important; }
             .control-buttons-row { flex-wrap: wrap !important; gap: 0.5rem !important; margin-bottom: 0 !important; justify-content: center; width: 100%; }
@@ -160,7 +163,7 @@ export default function RoomPage({ params }) {
             .karaoke-layout { padding-bottom: ${isControlsVisible ? '6rem' : '1rem'} !important; }
             .main-content-area { flex-direction: row; padding: 0 2rem; gap: 2rem; align-items: stretch; }
             .video-container { flex: 1; max-width: none; margin: 0; padding: 0; display: flex; flex-direction: column; justify-content: center; }
-            .lyrics-container { flex: 1; margin-top: 0 !important; }
+            .lyrics-container { flex: 1; margin-top: 0 !important; justify-content: center; align-items: center; }
             .controls-area { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(10, 10, 15, 0.95); backdrop-filter: blur(20px); border-top: 1px solid var(--glass-border); padding: 1rem 2rem; z-index: 40; flex-direction: row; justify-content: space-between; align-items: center; gap: 1.5rem; margin-bottom: 0; }
             .controls-area button { padding: 0.5rem 1rem !important; font-size: 0.9rem !important; }
             .control-buttons-row { flex-wrap: nowrap !important; gap: 0.5rem !important; margin-bottom: 0 !important; }
@@ -198,10 +201,6 @@ export default function RoomPage({ params }) {
         )}
       </div>
 
-      <div style={{ display: isControlsVisible ? 'block' : 'none' }}>
-        <PlayerControls onTogglePlay={togglePlay} onNextSong={handleNextSong} onPreviousSong={handlePreviousSong} onSeek={handleSeek} />
-      </div>
-
       <div className="main-content-area">
         {song && song.jobId && (
           <VideoPlayer videoId={song.jobId} ytPlayerRef={ytPlayerRef} onStateChange={handleYouTubeStateChange} />
@@ -219,6 +218,10 @@ export default function RoomPage({ params }) {
             </>
           )}
         </div>
+      </div>
+
+      <div style={{ display: isControlsVisible ? 'block' : 'none' }}>
+        <PlayerControls onTogglePlay={togglePlay} onNextSong={handleNextSong} onPreviousSong={handlePreviousSong} onSeek={handleSeek} />
       </div>
 
       <MicrophonePanel />

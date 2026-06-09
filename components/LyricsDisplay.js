@@ -48,11 +48,12 @@ export default function LyricsDisplay({ lyrics, currentTime }) {
       <style>{`
         .lyric-box {
           height: 100%;
-          max-height: 40vh;
+          max-height: 100%;
         }
-        @media (orientation: landscape) {
+        @media (orientation: landscape) and (min-width: 1024px) {
           .lyric-box {
-            max-height: 75vh;
+            max-height: 750px;
+            width: 100%;
           }
         }
 
