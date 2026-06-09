@@ -149,11 +149,16 @@ export function useSongLoader(roomId) {
       // 3. Set Lyrics
       if (backgroundLyrics) {
         store.setParsedLyrics(backgroundLyrics);
-        store.setFirstValidTime((backgroundLyrics.find(l => l.text.trim().length > 0) || backgroundLyrics[0])?.time || 0);
+        const isMultiVersion = backgroundLyrics.length > 0 && backgroundLyrics[0].lyrics;
+        const defaultLines = isMultiVersion ? backgroundLyrics[0].lyrics : backgroundLyrics;
+        
+        store.setFirstValidTime((defaultLines.find(l => l.text.trim().length > 0) || defaultLines[0])?.time || 0);
         store.setLyricsSource(
           backgroundSource === 'lrclib_aligned'
             ? 'LRCLIB + Whisper AI'
-            : 'Pure Whisper AI (Fallback)'
+            : backgroundSource === 'lrclib_aligned_multi'
+              ? 'LRCLIB (Multi-Version) + Whisper AI'
+              : 'Pure Whisper AI (Fallback)'
         );
       } else {
         loadLyricsFallback(song);

@@ -6,21 +6,28 @@ export default function LyricsDisplay({ lyrics, currentTime }) {
   const containerRef = useRef(null);
   const activeLineRef = useRef(null);
   const [offsetY, setOffsetY] = useState(0);
+  
+  const isMultiVersion = lyrics && lyrics.length > 0 && lyrics[0].lyrics;
+  const [selectedVersionIdx, setSelectedVersionIdx] = useState(0);
+
+  useEffect(() => {
+    if (isMultiVersion) {
+        const romanizedIdx = lyrics.findIndex(v => v.label && v.label.includes('Romanized'));
+        setSelectedVersionIdx(romanizedIdx !== -1 ? romanizedIdx : 0);
+    }
+  }, [lyrics, isMultiVersion]);
+
+  const activeLyricsList = isMultiVersion ? (lyrics[selectedVersionIdx]?.lyrics || []) : lyrics;
 
   const activeIndex = useMemo(() => {
-    if (!lyrics || lyrics.length === 0) return -1;
+    if (!activeLyricsList || activeLyricsList.length === 0) return -1;
     
     // Bulletproof search: find the line with the maximum time that is <= currentTime
     let bestIdx = -1;
     let maxTime = -1;
-    for (let i = 0; i < lyrics.length; i++) {
-      let lineStartTime = lyrics[i].time;
-      const activeWords = lyrics[i].words || [];
-      
-      // Use the actual start time of the first word
-      if (activeWords.length > 0 && activeWords[0].start != null) {
-          lineStartTime = activeWords[0].start;
-      }
+    for (let i = 0; i < activeLyricsList.length; i++) {
+      let lineStartTime = activeLyricsList[i].time;
+      const activeWords = activeLyricsList[i].words || [];
       
       // Activate the line slightly before the first word (0.3s) so it doesn't pop in already-highlighting
       if (currentTime >= (lineStartTime - 0.3) && lineStartTime >= maxTime) {
@@ -29,7 +36,7 @@ export default function LyricsDisplay({ lyrics, currentTime }) {
       }
     }
     return bestIdx;
-  }, [currentTime, lyrics]);
+  }, [currentTime, activeLyricsList]);
 
   // Use CSS hardware-accelerated transforms for perfectly smooth, interruptible scrolling
   useEffect(() => {
@@ -112,16 +119,41 @@ export default function LyricsDisplay({ lyrics, currentTime }) {
           padding: 'clamp(1rem, 5vh, 3rem) 1rem'
         }}
       >
+        {isMultiVersion && lyrics.length > 1 && (
+          <div style={{ position: 'absolute', top: '1rem', right: '1rem', zIndex: 100 }}>
+            <select
+              value={selectedVersionIdx}
+              onChange={(e) => setSelectedVersionIdx(Number(e.target.value))}
+              style={{
+                background: 'rgba(20, 20, 25, 0.8)',
+                border: '1px solid var(--glass-border)',
+                color: 'var(--text-main)',
+                padding: '0.4rem 0.8rem',
+                borderRadius: '1rem',
+                outline: 'none',
+                cursor: 'pointer',
+                fontSize: '0.8rem',
+                backdropFilter: 'blur(10px)',
+              }}
+            >
+              {lyrics.map((v, i) => (
+                <option key={i} value={i} style={{ background: '#111', color: 'white' }}>
+                  {v.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       <div style={{
         transform: `translateY(${offsetY}px)`,
         transition: 'transform 0.5s cubic-bezier(0.25, 1, 0.5, 1)',
         width: '100%'
       }}>
-        {lyrics.map((line, index) => {
+        {activeLyricsList.map((line, index) => {
         const isActive = index === activeIndex;
         const isPast = index < activeIndex;
         // In case we still need nextTime for interpolation logic
-        const nextTime = index < lyrics.length - 1 ? lyrics[index + 1].time : Infinity;
+        const nextTime = index < activeLyricsList.length - 1 ? activeLyricsList[index + 1].time : Infinity;
 
         let styleClass = 'body-text lyric-line';
         let customStyle = {};

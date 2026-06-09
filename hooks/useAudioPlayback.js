@@ -249,11 +249,11 @@ export function useAudioPlayback(roomId) {
   const vocalsVolume = useKaraokeStore(s => s.vocalsVolume);
   
   useEffect(() => {
-    if (webAudioNodesRef.current) {
+    if (webAudioNodesRef.current && window.__karaokeAudioCtx) {
       const { vocalGain } = webAudioNodesRef.current;
       vocalGain.gain.setTargetAtTime(vocalsEnabled ? vocalsVolume : 0, window.__karaokeAudioCtx.currentTime, 0.05);
     }
-  }, [vocalsEnabled, vocalsVolume]);
+  }, [vocalsEnabled, vocalsVolume, stems]);
 
   return {
     togglePlay,

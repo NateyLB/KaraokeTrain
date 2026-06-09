@@ -1,79 +1,35 @@
-import os
-os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
+import re
 
-import sys
-import json
-import argparse
-import difflib
-from faster_whisper import WhisperModel
+with open('lib/whisper_align.py', 'r') as f:
+    content = f.read()
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--wav', required=True)
-    parser.add_argument('--lyrics_file', required=False, default="")
-    args = parser.parse_args()
-    
-    model = WhisperModel("base", device="auto", compute_type="default")
-    
-    # If lyrics_file argument is passed, it is a JSON file
-    lrclib_data = []
-    if args.lyrics_file:
-        try:
-            with open(args.lyrics_file, 'r', encoding='utf-8') as f:
-                lrclib_data = json.load(f)
-        except:
-            pass
+# Replace prompt block
+prompt_old = """    # Construct an initial prompt to bias Whisper toward the correct lyrics/vocabulary
+    prompt_text = "Vocals, singing, clear lyrics."
+    if lrclib_data:
+        lyrics_sample = " ".join([l.get("text", "") for l in lrclib_data[:15] if l.get("text")]).strip()
+        if lyrics_sample:
+            prompt_text = lyrics_sample"""
 
-    # Get total audio duration to calculate progress
-    import wave
-    import contextlib
-    total_duration = 1.0
-    try:
-        with contextlib.closing(wave.open(args.wav, 'r')) as f:
-            frames = f.getnframes()
-            rate = f.getframerate()
-            total_duration = frames / float(rate)
-    except Exception:
-        pass
-
-    # Construct an initial prompt to bias Whisper toward the correct lyrics/vocabulary
+prompt_new = """    # Construct an initial prompt to bias Whisper toward the correct lyrics/vocabulary
     prompt_text = "Vocals, singing, clear lyrics."
     if lrclib_data:
         versions = lrclib_data if (isinstance(lrclib_data, list) and len(lrclib_data) > 0 and "lines" in lrclib_data[0]) else [{"label": "Default", "isKorean": False, "lines": lrclib_data}]
         lyrics_sample = " ".join([l.get("text", "") for l in versions[0].get("lines", [])[:15] if l.get("text")]).strip()
         if lyrics_sample:
-            prompt_text = lyrics_sample
+            prompt_text = lyrics_sample"""
 
-    segments_gen, _ = model.transcribe(
-        args.wav, 
-        word_timestamps=True, 
-        condition_on_previous_text=False, 
-        no_speech_threshold=0.9,
-        vad_filter=True,
-        vad_parameters=dict(min_silence_duration_ms=500),
-        initial_prompt=prompt_text
-    )
-    
-    whisper_segments = []
-    for s in segments_gen:
-        # Report progress to stderr (so Node.js can parse it)
-        progress = int((s.end / total_duration) * 100)
-        print(f"PROGRESS:{progress}", file=sys.stderr, flush=True)
-            
-        # Extract word-level data
-        segment_words = [{"word": w.word.strip(), "start": w.start, "end": w.end} for w in s.words if w.word.strip()]
-        whisper_segments.append({
-            "start": s.start, 
-            "end": s.end, 
-            "text": s.text.strip(),
-            "words": segment_words
-        })
-        
-    if not whisper_segments:
-        print(json.dumps({"source": "whisper_fallback", "lyrics": []}))
-        return
+content = content.replace(prompt_old, prompt_new)
 
-    if not lrclib_data:
+# Find where the alignment logic begins
+start_marker = """    if not lrclib_data:
+        # Return pure whisper transcription with precise words"""
+end_marker = """if __name__ == "__main__":"""
+
+start_idx = content.find(start_marker)
+end_idx = content.find(end_marker)
+
+new_alignment_logic = """    if not lrclib_data:
         # Return pure whisper transcription with precise words
         print(json.dumps({
             "source": "whisper_fallback", 
@@ -295,6 +251,10 @@ def main():
             "lyrics": final_versions
         }))
 
+"""
 
-if __name__ == "__main__":
-    main()
+content = content[:start_idx] + new_alignment_logic + "\n" + content[end_idx:]
+
+with open('lib/whisper_align.py', 'w') as f:
+    f.write(content)
+

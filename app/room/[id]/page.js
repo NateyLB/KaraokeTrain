@@ -44,13 +44,11 @@ export default function RoomPage({ params }) {
     setDuration, isControlsVisible,
   } = useKaraokeStore();
 
-  // Synchronously reset sensitive states when entering a new room
-  const lastRoomRef = useRef(null);
-  if (lastRoomRef.current !== roomId) {
-    lastRoomRef.current = roomId;
+  // Reset sensitive states when entering a new room
+  useEffect(() => {
     useKaraokeStore.getState().setMicEnabled(false);
     useKaraokeStore.getState().setIsRecording(false);
-  }
+  }, [roomId]);
 
   useEffect(() => { 
     setHostUrl(window.location.host); 
@@ -195,7 +193,6 @@ export default function RoomPage({ params }) {
             ref={el => audioRefs.current['multiplex'] = el}
             src={stems.multiplex}
             preload="auto"
-            crossOrigin="anonymous"
             onLoadedMetadata={(e) => setDuration(e.target.duration)}
           />
         )}

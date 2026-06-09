@@ -12,7 +12,7 @@ function formatTime(seconds) {
 export default function PlayerControls({ onTogglePlay, onNextSong, onPreviousSong, onSeek }) {
   const { 
     isPlaying, vocalsEnabled, setVocalsEnabled, isVideoVisible, setIsVideoVisible,
-    lyricsOffset, setLyricsOffset, currentSongTime, duration, parsedLyrics 
+    lyricsOffset, setLyricsOffset, currentSongTime, duration, parsedLyrics, firstValidTime 
   } = useKaraokeStore();
 
   return (
@@ -49,8 +49,7 @@ export default function PlayerControls({ onTogglePlay, onNextSong, onPreviousSon
                     <div style={{ display: 'flex', gap: '0.25rem' }}>
                         <button onClick={() => {
                             if (parsedLyrics.length > 0) {
-                                const firstValidLine = parsedLyrics.find(l => l.text.trim().length > 0) || parsedLyrics[0];
-                                setLyricsOffset((currentSongTime - firstValidLine.time).toFixed(2));
+                                setLyricsOffset((currentSongTime - firstValidTime).toFixed(2));
                             }
                         }} className="btn-secondary mobile-icon-btn" style={{ padding: '0.5rem 1rem', borderRadius: '99px', fontSize: '1rem', fontWeight: 600 }} title="Click right when singing starts to align lyrics">
                             <span className="hide-on-mobile">Align Start</span>
@@ -58,7 +57,6 @@ export default function PlayerControls({ onTogglePlay, onNextSong, onPreviousSon
                         </button>
                         
                         {(() => {
-                            const firstValidTime = (parsedLyrics.find(l => l.text.trim().length > 0) || parsedLyrics[0])?.time || 0;
                             const displayTime = ((Number(lyricsOffset) || 0) + firstValidTime).toFixed(2);
                             
                             return (
