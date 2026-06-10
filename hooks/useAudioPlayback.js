@@ -147,6 +147,9 @@ export function useAudioPlayback(roomId) {
 
     if (event.data === 1) {
       // PLAYING
+      if (window.__karaokeAudioCtx && window.__karaokeAudioCtx.state === 'suspended') {
+        window.__karaokeAudioCtx.resume().catch(() => {});
+      }
       setIsPlaying(true);
       isPlayingRef.current = true;
       if (audioRefs.current['multiplex']?.paused) {

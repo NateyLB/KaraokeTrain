@@ -190,6 +190,7 @@ export default function RoomPage({ params }) {
       <div style={{ display: 'none' }}>
         {stems?.multiplex && (
           <audio
+            key={stems.multiplex}
             ref={el => audioRefs.current['multiplex'] = el}
             src={stems.multiplex}
             preload="auto"
