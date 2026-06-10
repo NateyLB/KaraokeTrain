@@ -237,6 +237,19 @@ button {
     padding: 0.75rem !important;
     border-radius: 50% !important;
   }
+  .mobile-nowrap-row {
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    padding-bottom: 0.25rem;
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+  .mobile-nowrap-row::-webkit-scrollbar {
+    display: none;
+  }
+  .mobile-contents {
+    display: contents !important;
+  }
 }
 
 @media (min-width: 1025px) {

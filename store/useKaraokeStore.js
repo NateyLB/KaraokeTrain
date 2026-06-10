@@ -20,6 +20,7 @@ const useKaraokeStore = create((set, get) => ({
   autoTuneOn: false,
   echoCancellationOn: true,
   isVideoVisible: true,
+  selectedVersionIdx: 0,
 
   setIsPlaying: (v) => set({ isPlaying: v }),
   setLyricsOffset: (v) => set(state => ({ lyricsOffset: typeof v === 'function' ? v(state.lyricsOffset) : v })),
@@ -32,6 +33,7 @@ const useKaraokeStore = create((set, get) => ({
   setAutoTuneOn: (v) => set({ autoTuneOn: v }),
   setEchoCancellationOn: (v) => set({ echoCancellationOn: v }),
   setIsVideoVisible: (v) => set({ isVideoVisible: v }),
+  setSelectedVersionIdx: (v) => set({ selectedVersionIdx: v }),
 
   // Helper to get all synced settings as an object
   getSyncedSettings: () => {
@@ -44,10 +46,10 @@ const useKaraokeStore = create((set, get) => ({
       vocalsVolume: s.vocalsVolume,
       micEnabled: s.micEnabled,
       micVolume: s.micVolume,
-      echoOn: s.echoOn,
       autoTuneOn: s.autoTuneOn,
       echoCancellationOn: s.echoCancellationOn,
       isVideoVisible: s.isVideoVisible,
+      selectedVersionIdx: s.selectedVersionIdx,
     };
   },
 

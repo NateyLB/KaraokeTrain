@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useMemo, useState } from 'react';
+import useKaraokeStore from '../store/useKaraokeStore';
 
 export default function LyricsDisplay({ lyrics, currentTime }) {
   const containerRef = useRef(null);
@@ -8,12 +9,15 @@ export default function LyricsDisplay({ lyrics, currentTime }) {
   const [offsetY, setOffsetY] = useState(0);
   
   const isMultiVersion = lyrics && lyrics.length > 0 && lyrics[0].lyrics;
-  const [selectedVersionIdx, setSelectedVersionIdx] = useState(0);
+  const selectedVersionIdx = useKaraokeStore(s => s.selectedVersionIdx);
+  const setSelectedVersionIdx = useKaraokeStore(s => s.setSelectedVersionIdx);
 
   useEffect(() => {
-    if (isMultiVersion) {
+    if (isMultiVersion && selectedVersionIdx === 0) {
         const romanizedIdx = lyrics.findIndex(v => v.label && v.label.includes('Romanized'));
-        setSelectedVersionIdx(romanizedIdx !== -1 ? romanizedIdx : 0);
+        if (romanizedIdx !== -1 && romanizedIdx !== selectedVersionIdx) {
+            setSelectedVersionIdx(romanizedIdx);
+        }
     }
   }, [lyrics, isMultiVersion]);
 
@@ -119,31 +123,6 @@ export default function LyricsDisplay({ lyrics, currentTime }) {
           padding: 'clamp(1rem, 5vh, 3rem) 1rem'
         }}
       >
-        {isMultiVersion && lyrics.length > 1 && (
-          <div style={{ position: 'absolute', top: '1rem', right: '1rem', zIndex: 100 }}>
-            <select
-              value={selectedVersionIdx}
-              onChange={(e) => setSelectedVersionIdx(Number(e.target.value))}
-              style={{
-                background: 'rgba(20, 20, 25, 0.8)',
-                border: '1px solid var(--glass-border)',
-                color: 'var(--text-main)',
-                padding: '0.4rem 0.8rem',
-                borderRadius: '1rem',
-                outline: 'none',
-                cursor: 'pointer',
-                fontSize: '0.8rem',
-                backdropFilter: 'blur(10px)',
-              }}
-            >
-              {lyrics.map((v, i) => (
-                <option key={i} value={i} style={{ background: '#111', color: 'white' }}>
-                  {v.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
       <div style={{
         transform: `translateY(${offsetY}px)`,
         transition: 'transform 0.5s cubic-bezier(0.25, 1, 0.5, 1)',

@@ -1,5 +1,5 @@
 'use client';
-import { Play, Pause, Volume2, VolumeX, Video, SkipBack, SkipForward } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, Video, SkipBack, SkipForward, Languages } from 'lucide-react';
 import useKaraokeStore from '../store/useKaraokeStore';
 
 function formatTime(seconds) {
@@ -12,15 +12,24 @@ function formatTime(seconds) {
 export default function PlayerControls({ onTogglePlay, onNextSong, onPreviousSong, onSeek }) {
   const { 
     isPlaying, vocalsEnabled, setVocalsEnabled, isVideoVisible, setIsVideoVisible,
-    lyricsOffset, setLyricsOffset, currentSongTime, duration, parsedLyrics, firstValidTime 
+    lyricsOffset, setLyricsOffset, currentSongTime, duration, parsedLyrics, firstValidTime,
+    selectedVersionIdx, setSelectedVersionIdx
   } = useKaraokeStore();
+
+  const isMultiVersion = parsedLyrics && parsedLyrics.length > 1 && parsedLyrics[0].lyrics;
+
+  const cycleLanguage = () => {
+    if (!isMultiVersion) return;
+    const nextIdx = (selectedVersionIdx + 1) % parsedLyrics.length;
+    setSelectedVersionIdx(nextIdx);
+  };
 
   return (
     <div className="controls-area">
         <div className="control-buttons-row" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', justifyContent: 'center', alignItems: 'center', width: '100%' }}>
             
             {/* Left: Play buttons */}
-            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+            <div className="pc-left" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
                 <button onClick={onPreviousSong} className="btn-secondary" style={{ padding: '0.5rem', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '2.8rem', height: '2.8rem' }} title="Previous Song">
                     <SkipBack size={18} fill="currentColor" />
                 </button>
@@ -33,18 +42,34 @@ export default function PlayerControls({ onTogglePlay, onNextSong, onPreviousSon
             </div>
 
             {/* Right: Toggles + Slider */}
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.25rem', minWidth: '280px' }}>
+            <div className="pc-right mobile-contents" style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.25rem', minWidth: '280px' }}>
                 
                 {/* Toggles */}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', justifyContent: 'center', alignItems: 'center' }}>
-                    <button onClick={() => setVocalsEnabled(!vocalsEnabled)} className="btn-secondary mobile-icon-btn" style={{ padding: '0.75rem 1.5rem', borderRadius: '99px', fontSize: '1.1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: vocalsEnabled ? 1 : 0.7 }}>
-                        {vocalsEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
-                        <span className="hide-on-mobile">{vocalsEnabled ? 'Vocals On' : 'Vocals Off'}</span>
-                    </button>
-                    <button onClick={() => setIsVideoVisible(!isVideoVisible)} className="btn-secondary mobile-icon-btn" style={{ padding: '0.75rem 1.5rem', borderRadius: '99px', fontSize: '1.1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: isVideoVisible ? 1 : 0.7 }}>
-                        <Video size={20} />
-                        <span className="hide-on-mobile">{isVideoVisible ? 'Hide Video' : 'Show Video'}</span>
-                    </button>
+                <div className="pc-toggles mobile-contents" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', justifyContent: 'center', alignItems: 'center' }}>
+                    
+                    <div className="mobile-nowrap-row" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
+                        {isMultiVersion && (
+                            <button 
+                                onClick={cycleLanguage} 
+                                className="btn-secondary mobile-icon-btn" 
+                                style={{ padding: '0.75rem 1.5rem', borderRadius: '99px', fontSize: '1.1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', position: 'relative' }}
+                                title={`Switch Language (Current: ${parsedLyrics[selectedVersionIdx]?.label})`}
+                            >
+                                <Languages size={20} />
+                                <span className="hide-on-mobile" style={{ marginLeft: '0.2rem' }}>
+                                    {parsedLyrics[selectedVersionIdx]?.label?.includes('Romanized') ? 'ENG' : 'A/文'}
+                                </span>
+                            </button>
+                        )}
+                        <button onClick={() => setVocalsEnabled(!vocalsEnabled)} className="btn-secondary mobile-icon-btn" style={{ padding: '0.75rem 1.5rem', borderRadius: '99px', fontSize: '1.1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: vocalsEnabled ? 1 : 0.7 }}>
+                            {vocalsEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
+                            <span className="hide-on-mobile">{vocalsEnabled ? 'Vocals On' : 'Vocals Off'}</span>
+                        </button>
+                        <button onClick={() => setIsVideoVisible(!isVideoVisible)} className="btn-secondary mobile-icon-btn" style={{ padding: '0.75rem 1.5rem', borderRadius: '99px', fontSize: '1.1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: isVideoVisible ? 1 : 0.7 }}>
+                            <Video size={20} />
+                            <span className="hide-on-mobile">{isVideoVisible ? 'Hide Video' : 'Show Video'}</span>
+                        </button>
+                    </div>
                     
                     <div style={{ display: 'flex', gap: '0.25rem' }}>
                         <button onClick={() => {
