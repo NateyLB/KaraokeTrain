@@ -193,6 +193,7 @@ export default function RoomPage({ params }) {
             key={stems.multiplex}
             ref={el => audioRefs.current['multiplex'] = el}
             src={stems.multiplex}
+            crossOrigin="anonymous"
             preload="auto"
             onLoadedMetadata={(e) => setDuration(e.target.duration)}
           />

@@ -72,12 +72,16 @@ export function useAudioPlayback(roomId) {
       setIsPlaying(false);
       isPlayingRef.current = false;
     } else {
+      // Initialize/resume Web Audio synchronously inside the user gesture
+      wireWebAudio();
+      
+      // Must resume AudioContext synchronously inside user gesture for mobile Safari/Chrome
+      if (window.__karaokeAudioCtx && window.__karaokeAudioCtx.state === 'suspended') {
+        window.__karaokeAudioCtx.resume().catch(e => console.warn("Failed to resume AudioContext", e));
+      }
+
       // PLAY — apply vocal settings first to the web audio nodes
       if (webAudioNodesRef.current && window.__karaokeAudioCtx) {
-        // Must resume AudioContext synchronously inside user gesture for mobile Safari/Chrome
-        if (window.__karaokeAudioCtx.state === 'suspended') {
-          window.__karaokeAudioCtx.resume();
-        }
         const { vocalGain } = webAudioNodesRef.current;
         vocalGain.gain.setTargetAtTime(vocalsEnabled ? vocalsVolume : 0, window.__karaokeAudioCtx.currentTime || 0, 0.05);
       }
@@ -95,7 +99,7 @@ export function useAudioPlayback(roomId) {
       
       startTimeUpdates();
     }
-  }, [startTimeUpdates]);
+  }, [startTimeUpdates, wireWebAudio]);
 
   const handleNextSong = useCallback(async () => {
     Object.values(audioRefs.current).forEach(a => {
@@ -147,6 +151,8 @@ export function useAudioPlayback(roomId) {
 
     if (event.data === 1) {
       // PLAYING
+      wireWebAudio();
+      
       if (window.__karaokeAudioCtx && window.__karaokeAudioCtx.state === 'suspended') {
         window.__karaokeAudioCtx.resume().catch(() => {});
       }
@@ -181,12 +187,10 @@ export function useAudioPlayback(roomId) {
   const isPlaying = useKaraokeStore(s => s.isPlaying);
   const webAudioNodesRef = useRef(null);
 
-  useEffect(() => {
+  const wireWebAudio = useCallback(() => {
     const audioEl = audioRefs.current['multiplex'];
     if (!audioEl) return;
-
-    // We must initialize Web Audio only after user interaction, or rely on browser autoplay policies
-    // Luckily, the user has to click a song to get here!
+    
     try {
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       if (!window.__karaokeAudioCtx) {
@@ -194,47 +198,36 @@ export function useAudioPlayback(roomId) {
       }
       const ctx = window.__karaokeAudioCtx;
 
-      // Resume context if suspended (Note: on mobile this might be ignored if not in user gesture,
-      // but togglePlay will catch it and resume it properly).
       if (ctx.state === 'suspended') {
         ctx.resume().catch(() => {});
       }
 
-      // If we haven't wired up this specific audio element yet...
       if (!audioEl.__webAudioConnected) {
         audioEl.__webAudioConnected = true;
 
         const source = ctx.createMediaElementSource(audioEl);
         
-        // 1. Split the stereo stream into L (0) and R (1)
         const splitter = ctx.createChannelSplitter(2);
         source.connect(splitter);
 
-        // 2. Create independent volume controls (Gain Nodes)
         const instrGain = ctx.createGain();
         const vocalGain = ctx.createGain();
 
-        // 3. Create a Merger to put them back together. 
-        // We want both L and R to play out of BOTH speakers (downmix to mono)
         const merger = ctx.createChannelMerger(2);
 
-        // Route Instrumental (Left Channel, 0) to both L and R outputs
         splitter.connect(instrGain, 0);
-        instrGain.connect(merger, 0, 0); // L
-        instrGain.connect(merger, 0, 1); // R
+        instrGain.connect(merger, 0, 0); 
+        instrGain.connect(merger, 0, 1); 
 
-        // Route Vocals (Right Channel, 1) to both L and R outputs
         splitter.connect(vocalGain, 1);
-        vocalGain.connect(merger, 0, 0); // L
-        vocalGain.connect(merger, 0, 1); // R
+        vocalGain.connect(merger, 0, 0); 
+        vocalGain.connect(merger, 0, 1); 
 
         if (!window.__karaokeMediaStreamDest) {
           window.__karaokeMediaStreamDest = ctx.createMediaStreamDestination();
         }
 
-        // Send to speakers
         merger.connect(ctx.destination);
-        // Send to recording stream
         merger.connect(window.__karaokeMediaStreamDest);
 
         webAudioNodesRef.current = { instrGain, vocalGain };
@@ -242,10 +235,12 @@ export function useAudioPlayback(roomId) {
     } catch (e) {
       console.error("Web Audio API failed to initialize:", e);
     }
-    
-    // Clean up function if we want to disconnect, but we can reuse the connection for the lifetime of the audio element
-    return () => {};
-  }, [stems]);
+  }, []);
+
+  // Pre-wire on mount if possible, but we'll also call it on play for iOS Safari
+  useEffect(() => {
+    wireWebAudio();
+  }, [stems, wireWebAudio]);
 
   // Sync vocal settings to the Gain Node instead of the raw audio element
   const vocalsEnabled = useKaraokeStore(s => s.vocalsEnabled);
