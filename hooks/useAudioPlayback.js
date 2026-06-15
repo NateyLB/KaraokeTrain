@@ -249,9 +249,53 @@ export function useAudioPlayback(roomId) {
   useEffect(() => {
     if (webAudioNodesRef.current && window.__karaokeAudioCtx) {
       const { vocalGain } = webAudioNodesRef.current;
-      vocalGain.gain.setTargetAtTime(vocalsEnabled ? vocalsVolume : 0, window.__karaokeAudioCtx.currentTime, 0.05);
+      vocalGain.gain.setTargetAtTime(vocalsEnabled ? vocalsVolume : 0, window.__karaokeAudioCtx.currentTime || 0, 0.05);
     }
-  }, [vocalsEnabled, vocalsVolume, stems]);
+  }, [vocalsEnabled, vocalsVolume]);
+
+  // Prevent display from sleeping while song is playing
+  useEffect(() => {
+    let wakeLock = null;
+
+    const requestWakeLock = async () => {
+      if ('wakeLock' in navigator && isPlaying) {
+        try {
+          wakeLock = await navigator.wakeLock.request('screen');
+        } catch (err) {
+          console.warn('Wake Lock request failed:', err.name, err.message);
+        }
+      }
+    };
+
+    const releaseWakeLock = async () => {
+      if (wakeLock !== null) {
+        try {
+          await wakeLock.release();
+          wakeLock = null;
+        } catch (err) {
+          console.warn('Wake Lock release failed:', err.name, err.message);
+        }
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (wakeLock !== null && document.visibilityState === 'visible') {
+        requestWakeLock();
+      }
+    };
+
+    if (isPlaying) {
+      requestWakeLock();
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    } else {
+      releaseWakeLock();
+    }
+
+    return () => {
+      releaseWakeLock();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [isPlaying]);
 
   return {
     togglePlay,
