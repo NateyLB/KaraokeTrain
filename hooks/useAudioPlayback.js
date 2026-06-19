@@ -237,9 +237,34 @@ export function useAudioPlayback(roomId) {
     }
   }, []);
 
-  // Pre-wire on mount if possible, but we'll also call it on play for iOS Safari
+  // Pre-wire on mount if possible, and set up a global fallback unlock listener
   useEffect(() => {
     wireWebAudio();
+
+    const unlockAudio = () => {
+      try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!window.__karaokeAudioCtx) {
+          window.__karaokeAudioCtx = new AudioContext({ latencyHint: 'interactive' });
+        }
+        if (window.__karaokeAudioCtx.state === 'suspended') {
+          window.__karaokeAudioCtx.resume().catch(() => {});
+        }
+        window.removeEventListener('click', unlockAudio);
+        window.removeEventListener('touchstart', unlockAudio);
+        window.removeEventListener('keydown', unlockAudio);
+      } catch (e) {}
+    };
+
+    window.addEventListener('click', unlockAudio);
+    window.addEventListener('touchstart', unlockAudio);
+    window.addEventListener('keydown', unlockAudio);
+
+    return () => {
+      window.removeEventListener('click', unlockAudio);
+      window.removeEventListener('touchstart', unlockAudio);
+      window.removeEventListener('keydown', unlockAudio);
+    };
   }, [stems, wireWebAudio]);
 
   // Sync vocal settings to the Gain Node instead of the raw audio element

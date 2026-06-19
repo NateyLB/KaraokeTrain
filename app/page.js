@@ -12,6 +12,18 @@ export default function Home() {
   const hostParty = () => {
     // Generate random 4 character alphanumeric code safely
     const code = Math.random().toString(36).substring(2, 10).padStart(4, '0').substring(0, 4).toUpperCase();
+    
+    // Unlock Web Audio API synchronously inside this user gesture!
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!window.__karaokeAudioCtx) {
+        window.__karaokeAudioCtx = new AudioContext({ latencyHint: 'interactive' });
+      }
+      if (window.__karaokeAudioCtx.state === 'suspended') {
+        window.__karaokeAudioCtx.resume().catch(() => {});
+      }
+    } catch(e) {}
+
     router.push(`/room/${code}`);
   };
 
