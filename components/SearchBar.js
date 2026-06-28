@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useRef, useEffect } from 'react';
-import { Search, Music2, ChevronRight, Music, Sparkles, Mic } from 'lucide-react';
+import { Search, Music2, ChevronRight, ChevronDown, Music, Sparkles, Mic } from 'lucide-react';
 import useKaraokeStore from '../store/useKaraokeStore';
 
-export default function SearchBar({ onSelect }) {
+export default function SearchBar({ onSelect, defaultCatalogOpen = true }) {
   const { partyState } = useKaraokeStore();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
@@ -15,6 +15,7 @@ export default function SearchBar({ onSelect }) {
   const [isListening, setIsListening] = useState(false);
   const [catalog, setCatalog] = useState([]);
   const [isLoadingCatalog, setIsLoadingCatalog] = useState(true);
+  const [isCatalogOpen, setIsCatalogOpen] = useState(defaultCatalogOpen);
   const recognitionRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -227,28 +228,38 @@ export default function SearchBar({ onSelect }) {
 
       <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
         {!hasSearched && (
-          <div style={{ marginTop: '1rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', paddingLeft: '0.5rem' }}>
+          <div style={{ marginTop: '0.5rem' }}>
+            <div 
+              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: isCatalogOpen ? '1rem' : '0', paddingLeft: '0.5rem', cursor: 'pointer' }}
+              onClick={() => setIsCatalogOpen(!isCatalogOpen)}
+            >
               <Music2 size={18} color="var(--primary-accent)" />
               <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-main)', margin: 0 }}>Ready to Sing</h3>
               <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginLeft: 'auto', display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
                 <span>{isLoadingCatalog ? 'Loading...' : `${catalog.length} songs`}</span>
+                {isCatalogOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
               </span>
             </div>
             
-            {isLoadingCatalog && catalog.length === 0 ? (
-               <div style={{ textAlign: 'center', opacity: 0.4, marginTop: '3rem' }}>
-                 <Music size={40} style={{ margin: '0 auto', marginBottom: '1rem' }} className="animate-pulse-glow" />
-                 <p className="body-text">Loading catalog...</p>
-               </div>
-            ) : catalog.length === 0 ? (
-               <div style={{ textAlign: 'center', opacity: 0.4, marginTop: '3rem' }}>
-                 <Music size={56} style={{ margin: '0 auto', marginBottom: '1rem' }} />
-                 <p className="body-text">Search for any song to add it to the queue.</p>
-               </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                {catalog.map((track, i) => (
+            <div style={{ 
+              maxHeight: isCatalogOpen ? '300px' : '0px', 
+              overflow: 'hidden', 
+              transition: 'all 0.3s ease-in-out',
+              opacity: isCatalogOpen ? 1 : 0
+            }}>
+              {isLoadingCatalog && catalog.length === 0 ? (
+                 <div style={{ textAlign: 'center', opacity: 0.4, marginTop: '1rem', marginBottom: '1rem' }}>
+                   <Music size={40} style={{ margin: '0 auto', marginBottom: '1rem' }} className="animate-pulse-glow" />
+                   <p className="body-text">Loading catalog...</p>
+                 </div>
+               ) : catalog.length === 0 ? (
+                 <div style={{ textAlign: 'center', opacity: 0.4, marginTop: '1rem', marginBottom: '1rem' }}>
+                   <Music size={56} style={{ margin: '0 auto', marginBottom: '1rem' }} />
+                   <p className="body-text">Search for any song to add it to the queue.</p>
+                 </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: '230px', overflowY: 'auto', paddingRight: '0.2rem' }}>
+                  {catalog.map((track, i) => (
                   <div
                     key={track.videoId || i}
                     className="glass-panel animate-fade-in"
@@ -295,8 +306,9 @@ export default function SearchBar({ onSelect }) {
                     <ChevronRight size={16} color="var(--text-muted)" style={{ flexShrink: 0 }} />
                   </div>
                 ))}
-              </div>
-            )}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
