@@ -275,7 +275,7 @@ def main():
                     w_copy = {k: v for k, v in w.items() if k != "line_idx"}
                     line_words.append(w_copy)
                 
-            time_start = lrclib_line_times[line_idx] if line_idx < len(lrclib_line_times) else (line_words[0]["start"] if line_words else 0)
+            time_start = line_words[0]["start"] if line_words else (lrclib_line_times[line_idx] if line_idx < len(lrclib_line_times) else 0)
             aligned_lyrics.append({"time": time_start, "text": line, "words": line_words})
                 
         final_versions.append({
