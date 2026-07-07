@@ -40,8 +40,13 @@ export function usePartySync(roomId, role, callbacks = {}) {
 
   // Watch for local setting changes -> sync to server
   const { isPlaying, lyricsOffset, firstValidTime, vocalsEnabled, vocalsVolume, micEnabled, micVolume, echoOn, autoTuneOn, isVideoVisible } = useKaraokeStore();
+  const isInitialMount = useRef(true);
 
   useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
     if (isSyncingFromServer.current) return;
     lastLocalInteractionTimestamp.current = Date.now();
     syncSettingsToServer({
