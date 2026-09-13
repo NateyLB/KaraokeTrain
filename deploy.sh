@@ -4,14 +4,23 @@
 set -e
 
 # Configuration
-PROJECT_ID="karaoketrain"
+PROJECT_ID="karaoketrain-508500"
 REGION="us-central1"
 SERVICE_NAME="karaoketrain"
 IMAGE_NAME="gcr.io/$PROJECT_ID/$SERVICE_NAME"
-BUCKET_NAME="stems-lyrics"
+BUCKET_NAME="karaoke-stems-lyrics"
 
 echo "🚀 Building and pushing Docker image using Google Cloud Build..."
 gcloud builds submit --tag $IMAGE_NAME .
+
+echo "🧹 Cleaning up old images in Container Registry..."
+# Keep the 2 most recent images (current + 1 rollback), delete the rest
+gcloud container images list-tags $IMAGE_NAME \
+  --format="get(digest)" --sort-by="~timestamp" | tail -n +3 | \
+  while read digest; do
+    echo "Deleting old image digest: $digest"
+    gcloud container images delete "$IMAGE_NAME@$digest" --force-delete-tags --quiet || true
+  done
 
 # (No longer exporting .env.local to the shell to protect secrets)
 

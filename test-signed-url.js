@@ -3,7 +3,7 @@ import { Storage } from '@google-cloud/storage';
 async function test() {
   try {
     const storage = new Storage();
-    const bucket = storage.bucket('stems-lyrics');
+    const bucket = storage.bucket('karaoke-stems-lyrics');
     const file = bucket.file('processedSongs/7h9a_0opSIQ/vocals.wav');
     
     const [exists] = await file.exists();
