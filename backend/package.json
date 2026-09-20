@@ -1,0 +1,13 @@
+{
+  "name": "karaoke-app-backend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "start": "node downloader-api.js"
+  },
+  "dependencies": {
+    "@google-cloud/storage": "^7.19.0",
+    "express": "^5.2.1",
+    "play-dl": "^1.9.7"
+  }
+}

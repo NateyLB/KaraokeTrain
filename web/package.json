@@ -1,0 +1,34 @@
+{
+  "name": "karaoke-app-web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -H 0.0.0.0",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@spotify/basic-pitch": "^1.0.1",
+    "@supabase/supabase-js": "^2.106.1",
+    "@tensorflow/tfjs": "^4.22.0",
+    "eventemitter3": "^5.0.4",
+    "kuroshiro": "^1.2.0",
+    "kuroshiro-analyzer-kuromoji": "^1.1.0",
+    "lucide-react": "^1.16.0",
+    "midi-writer-js": "^3.2.1",
+    "next": "16.2.6",
+    "pinyin": "^4.0.0",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "react-youtube": "^10.1.0",
+    "replicate": "^1.4.0",
+    "romaja": "^0.9.0",
+    "wavefile": "^11.0.0",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "eslint": "^9",
+    "eslint-config-next": "16.2.6"
+  }
+}
