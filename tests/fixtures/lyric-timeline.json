@@ -1,0 +1,377 @@
+[
+  {
+    "name": "word timing overrides stale line timing",
+    "lines": [
+      {
+        "text": "second",
+        "time": 1,
+        "words": [
+          {
+            "word": "second",
+            "start": 7,
+            "end": 9
+          }
+        ]
+      },
+      {
+        "text": "first",
+        "time": 80,
+        "words": [
+          {
+            "word": "first",
+            "start": 2,
+            "end": 6
+          }
+        ]
+      }
+    ],
+    "samples": [
+      {
+        "time": 0,
+        "index": 0,
+        "singing": false,
+        "rest": true,
+        "countdown": 2,
+        "finished": false
+      },
+      {
+        "time": 1.8,
+        "index": 0,
+        "singing": false,
+        "rest": false,
+        "countdown": 0,
+        "finished": false
+      },
+      {
+        "time": 2,
+        "index": 0,
+        "singing": true,
+        "rest": false,
+        "countdown": 0,
+        "finished": false
+      },
+      {
+        "time": 5.9,
+        "index": 0,
+        "singing": true,
+        "rest": false,
+        "countdown": 0,
+        "finished": false
+      },
+      {
+        "time": 6.9,
+        "index": 1,
+        "singing": false,
+        "rest": false,
+        "countdown": 0,
+        "finished": false
+      },
+      {
+        "time": 7,
+        "index": 1,
+        "singing": true,
+        "rest": false,
+        "countdown": 0,
+        "finished": false
+      },
+      {
+        "time": 9,
+        "index": 1,
+        "singing": false,
+        "rest": false,
+        "countdown": 0,
+        "finished": true
+      },
+      {
+        "time": 12,
+        "index": 1,
+        "singing": false,
+        "rest": false,
+        "countdown": 0,
+        "finished": true
+      }
+    ]
+  },
+  {
+    "name": "sustained words survive preview",
+    "lines": [
+      {
+        "text": "held",
+        "time": 0,
+        "words": [
+          {
+            "word": "held",
+            "start": 0,
+            "end": 4.9
+          }
+        ]
+      },
+      {
+        "text": "next",
+        "time": 5,
+        "words": [
+          {
+            "word": "next",
+            "start": 5,
+            "end": 7
+          }
+        ]
+      }
+    ],
+    "samples": [
+      {
+        "time": -1,
+        "index": 0,
+        "singing": false,
+        "rest": true,
+        "countdown": 1,
+        "finished": false
+      },
+      {
+        "time": 0,
+        "index": 0,
+        "singing": true,
+        "rest": false,
+        "countdown": 0,
+        "finished": false
+      },
+      {
+        "time": 4.8,
+        "index": 0,
+        "singing": true,
+        "rest": false,
+        "countdown": 0,
+        "finished": false
+      },
+      {
+        "time": 4.9,
+        "index": 1,
+        "singing": false,
+        "rest": false,
+        "countdown": 0,
+        "finished": false
+      },
+      {
+        "time": 4.95,
+        "index": 1,
+        "singing": false,
+        "rest": false,
+        "countdown": 0,
+        "finished": false
+      },
+      {
+        "time": 5,
+        "index": 1,
+        "singing": true,
+        "rest": false,
+        "countdown": 0,
+        "finished": false
+      },
+      {
+        "time": 7,
+        "index": 1,
+        "singing": false,
+        "rest": false,
+        "countdown": 0,
+        "finished": true
+      },
+      {
+        "time": 8,
+        "index": 1,
+        "singing": false,
+        "rest": false,
+        "countdown": 0,
+        "finished": true
+      }
+    ]
+  },
+  {
+    "name": "instrumental gap and seek",
+    "lines": [
+      {
+        "text": "first",
+        "time": 1,
+        "words": [
+          {
+            "word": "first",
+            "start": 1,
+            "end": 4
+          }
+        ]
+      },
+      {
+        "text": "next",
+        "time": 20,
+        "words": [
+          {
+            "word": "next",
+            "start": 20,
+            "end": 23
+          }
+        ]
+      }
+    ],
+    "samples": [
+      {
+        "time": 0,
+        "index": 0,
+        "singing": false,
+        "rest": true,
+        "countdown": 1,
+        "finished": false
+      },
+      {
+        "time": 1,
+        "index": 0,
+        "singing": true,
+        "rest": false,
+        "countdown": 0,
+        "finished": false
+      },
+      {
+        "time": 4.5,
+        "index": 0,
+        "singing": false,
+        "rest": false,
+        "countdown": 0,
+        "finished": false
+      },
+      {
+        "time": 4.6,
+        "index": 1,
+        "singing": false,
+        "rest": true,
+        "countdown": 16,
+        "finished": false
+      },
+      {
+        "time": 10,
+        "index": 1,
+        "singing": false,
+        "rest": true,
+        "countdown": 10,
+        "finished": false
+      },
+      {
+        "time": 19.6,
+        "index": 1,
+        "singing": false,
+        "rest": true,
+        "countdown": 1,
+        "finished": false
+      },
+      {
+        "time": 19.8,
+        "index": 1,
+        "singing": false,
+        "rest": false,
+        "countdown": 0,
+        "finished": false
+      },
+      {
+        "time": 21,
+        "index": 1,
+        "singing": true,
+        "rest": false,
+        "countdown": 0,
+        "finished": false
+      },
+      {
+        "time": 23,
+        "index": 1,
+        "singing": false,
+        "rest": false,
+        "countdown": 0,
+        "finished": true
+      },
+      {
+        "time": 2,
+        "index": 0,
+        "singing": true,
+        "rest": false,
+        "countdown": 0,
+        "finished": false
+      }
+    ]
+  },
+  {
+    "name": "missing word timing, blank lines and invalid durations",
+    "lines": [
+      {
+        "time": 0,
+        "text": "first"
+      },
+      {
+        "time": 5,
+        "text": " "
+      },
+      {
+        "time": 8,
+        "text": "second",
+        "words": [
+          {
+            "word": "bad",
+            "start": 8,
+            "end": 8
+          }
+        ]
+      }
+    ],
+    "samples": [
+      {
+        "time": 0,
+        "index": 0,
+        "singing": true,
+        "rest": false,
+        "countdown": 0,
+        "finished": false
+      },
+      {
+        "time": 7.9,
+        "index": 0,
+        "singing": true,
+        "rest": false,
+        "countdown": 0,
+        "finished": false
+      },
+      {
+        "time": 8,
+        "index": 1,
+        "singing": true,
+        "rest": false,
+        "countdown": 0,
+        "finished": false
+      },
+      {
+        "time": 13,
+        "index": 1,
+        "singing": false,
+        "rest": false,
+        "countdown": 0,
+        "finished": true
+      }
+    ]
+  },
+  {
+    "name": "empty lyrics",
+    "lines": [],
+    "samples": [
+      {
+        "time": 0,
+        "index": -1,
+        "singing": false,
+        "rest": false,
+        "countdown": 0,
+        "finished": false
+      },
+      {
+        "time": 100,
+        "index": -1,
+        "singing": false,
+        "rest": false,
+        "countdown": 0,
+        "finished": false
+      }
+    ]
+  }
+]

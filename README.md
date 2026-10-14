@@ -1,5 +1,7 @@
 # KaraokeTrain
 
+The native Swift continuation, verification commands and current parity gaps are documented in [ios/README.md](ios/README.md). Shared API and hosting exploration is in [docs/SHARED_BACKEND_PLAN.md](docs/SHARED_BACKEND_PLAN.md).
+
 ## Local song processing
 
 New songs require FFmpeg and a Python environment with Demucs and faster-whisper. Cached songs use their saved audio and lyrics directly.

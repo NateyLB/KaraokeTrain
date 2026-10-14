@@ -1,0 +1,32 @@
+#!/bin/sh
+set -eu
+
+native_test_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+native_repo_root=$(dirname "$native_test_root")
+native_sources="$native_test_root/KaraokeTrain/KaraokeTrain"
+native_output=$(mktemp -d "${TMPDIR:-/tmp}/karaoketrain-native-tests.XXXXXX")
+trap 'rm -rf "$native_output"' EXIT HUP INT TERM
+
+compile_and_run() {
+    native_case=$1
+    shift
+    xcrun swiftc -module-cache-path "$native_output/modules" "$@" -o "$native_output/$native_case"
+    "$native_output/$native_case"
+}
+
+cd "$native_repo_root"
+compile_and_run timeline "$native_sources/LyricsModel.swift" "$native_sources/LyricTimeline.swift" "$native_test_root/Tests/LyricTimelineSmoke.swift"
+compile_and_run events "$native_sources/ServerEventDecoder.swift" "$native_test_root/Tests/ServerEventsSmoke.swift"
+compile_and_run contract "$native_sources/ServerConfiguration.swift" "$native_sources/ServerEventDecoder.swift" "$native_sources/Models.swift" "$native_sources/PartyViewModel.swift" "$native_sources/SongSearchModel.swift" "$native_test_root/Tests/WebParitySmoke.swift"
+compile_and_run queue "$native_sources/Models.swift" "$native_sources/QueuePreparationModel.swift" "$native_test_root/Tests/QueuePreparationSmoke.swift"
+compile_and_run overlap "$native_sources/DemucsOverlap.swift" "$native_test_root/Tests/OverlapSmoke.swift"
+
+if [ "${1:-}" = "--live-api" ] && [ "$#" -eq 3 ]; then
+    xcrun swiftc -module-cache-path "$native_output/modules" "$native_sources/ServerConfiguration.swift" "$native_sources/ServerEventDecoder.swift" "$native_sources/PartyViewModel.swift" "$native_test_root/Tests/RoomConnectionSmoke.swift" -o "$native_output/room"
+    "$native_output/room" "$2"
+    xcrun swiftc -module-cache-path "$native_output/modules" "$native_sources/AudioMixer.swift" "$native_test_root/Tests/StreamingPlaybackSmoke.swift" -o "$native_output/audio"
+    "$native_output/audio" "$2/api/stems?jobId=$3&stem=multiplex"
+elif [ "$#" -ne 0 ]; then
+    echo "Usage: $0 [--live-api SERVER_URL CACHED_VIDEO_ID]" >&2
+    exit 2
+fi

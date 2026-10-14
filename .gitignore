@@ -53,3 +53,11 @@ __pycache__/
 
 # Downloaded processing model weights
 models/
+
+# Native development artifacts and separately supplied Core ML weights
+ios/**/LocalDevelopment.xcconfig
+ios/**/xcuserdata/
+ios/**/DerivedData/
+*.xcuserstate
+*.mlpackage/
+*.mlmodelc/

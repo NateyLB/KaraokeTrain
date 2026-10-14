@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Use the microphone when you tap voice search to find songs.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Turn your spoken song requests into search text.</string>
+	<key>KaraokeServerURL</key>
+	<string>http://$(KARAOKE_SERVER_HOST):$(KARAOKE_SERVER_PORT)</string>
+	<key>KaraokeBackendURL</key>
+	<string>http://$(KARAOKE_SERVER_HOST):$(KARAOKE_DOWNLOADER_PORT)</string>
+	<key>KaraokeAPISecret</key>
+	<string>$(KARAOKE_API_SECRET)</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Connect to your karaoke server to process songs and stream audio and lyrics.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+</dict>
+</plist>

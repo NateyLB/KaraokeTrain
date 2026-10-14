@@ -1,6 +1,6 @@
 # Shared web and iOS backend proposal
 
-Status: exploration only, October 14, 2026. Major architecture changes and cloud deployment require the owner's approval. No infrastructure has been changed.
+Status: October 14, 2026. The owner approved initially sharing the existing API with the native SwiftUI/AVFoundation app. Processing location remains under discussion; major architecture changes and deployment still require approval. No infrastructure has been changed.
 
 ## Starting point
 
@@ -31,3 +31,5 @@ Do not move browser-cookie-based downloading into a generic container without te
 ## Approval and validation needed
 
 Choose server versus on-device processing, the initial hosting region/budget, and the account/room access model before introducing new services. Measure cached playback startup separately from cold processing. Test real iPhone permissions, audio routes, interruptions, mic/recording, YouTube playback and background transitions before claiming complete 1:1 parity.
+
+The owner's Mac mini is a reasonable first shared-server candidate because the current downloader, Demucs, Qwen and GCS adapters already run there. This is an operational recommendation, not a measured speed comparison with the iPhone 18 Pro. The earlier Swift port restricts Core ML to CPU-only; benchmark accelerator settings on physical hardware before ruling out phone processing. See [the measurement plan](../ios/BENCHMARK_PLAN.md). Dependable remote Mac hosting still needs stable authenticated ingress, process supervision and a recovery strategy. The current broken custom Cloudflare hostname should not be treated as a production endpoint.

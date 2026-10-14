@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { prepareLyricTimeline, lyricPlaybackState, wordProgress, selectedLyrics, wordSeparator } from '../lib/lyrics/timeline.js';
 const line = (text,start,end,time=start) => ({text,time,words:[{word:text,start,end}]});
 test('actual word times override stale studio line starts',()=>{
@@ -34,4 +35,14 @@ test('selected languages and native character spacing are preserved',()=>{
   assert.deepEqual(selectedLyrics([{lyrics:['original']}],9),['original']);
   assert.equal(wordSeparator('你','好'),'');
   assert.equal(wordSeparator('hello','world'),' ');
+});
+test('web lyric states match the fixtures consumed by the native Swift port', () => {
+  const fixtures = JSON.parse(readFileSync(new URL('./fixtures/lyric-timeline.json', import.meta.url), 'utf8'));
+  for (const fixture of fixtures) {
+    const timeline = prepareLyricTimeline(fixture.lines);
+    for (const { time, ...expected } of fixture.samples) {
+      const actual = lyricPlaybackState(timeline, time);
+      assert.deepEqual({ ...actual, finished: Boolean(actual.finished) }, expected, `${fixture.name} at ${time}`);
+    }
+  }
 });
