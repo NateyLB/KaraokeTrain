@@ -2,7 +2,4 @@
 // Keep machine-specific overrides in the ignored LocalDevelopment.xcconfig.
 KARAOKE_SERVER_HOST = localhost
 KARAOKE_SERVER_PORT = 3000
-KARAOKE_DOWNLOADER_PORT = 4000
-// Legacy on-device adapter only; never use a shared downloader secret in a distributed app.
-KARAOKE_API_SECRET =
 #include? "LocalDevelopment.xcconfig"

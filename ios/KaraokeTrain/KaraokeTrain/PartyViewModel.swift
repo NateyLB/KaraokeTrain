@@ -158,7 +158,7 @@ class PartyViewModel: ObservableObject {
         return String((0..<4).map { _ in letters.randomElement()! })
     }
 
-    /// Don't navigate to a room until both services and native-host registration work.
+    /// Hosts use the same room and server-owned processing contract as the web client.
     func hostParty() async -> Bool {
         guard !isConnecting else { return false }
         leaveParty()
@@ -167,27 +167,14 @@ class PartyViewModel: ObservableObject {
         roomCode = generateRoomCode()
         isHosting = true
         errorMessage = nil
-        do {
-            let backend = ServerConfiguration.legacyDownloader
-            guard let url = URL(string: backend + "/health") else { throw URLError(.badURL) }
-            var request = URLRequest(url: url)
-            request.cachePolicy = .reloadIgnoringLocalCacheData
-            request.timeoutInterval = 12
-            let (data, response) = try await session.data(for: request)
-            guard (response as? HTTPURLResponse)?.statusCode == 200,
-                  let health = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  health["service"] as? String == "karaoke-downloader" else {
-                throw StemSeparatorError.invalid("The backend is not ready. Run npm start from the project folder to start both services.")
-            }
-            try await sendCommand(action: "setNativeHost", payload: ["isNative": true])
-            guard partyState?.isNativeHost == true else { throw URLError(.badServerResponse) }
-            startEvents()
-            return true
-        } catch {
-            errorMessage = "Could not connect to the karaoke servers. Run npm start on the Mac, check Wi-Fi and the server addresses in Info.plist.\n\(error.localizedDescription)"
+        await fetchPartyState()
+        guard partyState != nil else {
+            errorMessage = errorMessage ?? "Could not connect to the karaoke server. Check the server address and network."
             leaveParty()
             return false
         }
+        startEvents()
+        return true
     }
 
     func joinParty(code: String) async -> Bool {
@@ -300,9 +287,6 @@ class PartyViewModel: ObservableObject {
     /// Sends a command (like add, next, remove) to the backend
     func sendCommand(action: String, payload: [String: Any]) async throws {
         guard !roomCode.isEmpty else { throw URLError(.notConnectedToInternet) }
-        if action == "add", isHosting, partyState?.isNativeHost != true {
-            throw StemSeparatorError.invalid("The native room is still connecting. Try again once connected.")
-        }
         let requestedRoom = roomCode
         let generation = connectionGeneration
         guard let url = URL(string: "\(serverBaseURL)/api/party") else { throw URLError(.badURL) }

@@ -17,8 +17,9 @@ public actor StemSeparator {
     public static let hopFrames = 396_900
     private var model: MLModel?
     private var busy = false
+    private let computeUnits: MLComputeUnits
 
-    public init() {}
+    public init(computeUnits: MLComputeUnits = .cpuOnly) { self.computeUnits = computeUnits }
 
     private func loadModel() throws -> MLModel {
         if let model { return model }
@@ -26,9 +27,8 @@ public actor StemSeparator {
             throw StemSeparatorError.invalid("The compiled Demucs model is missing from this build.")
         }
         let configuration = MLModelConfiguration()
-        // Conservative first-device-test configuration. Never dispatch this
-        // converted transformer to the Neural Engine or GPU in the background.
-        configuration.computeUnits = .cpuOnly
+        // Conservative default; accelerated configurations are opt-in foreground benchmarks.
+        configuration.computeUnits = computeUnits
         let loaded = try MLModel(contentsOf: url, configuration: configuration)
         guard let input = loaded.modelDescription.inputDescriptionsByName["audio"]?.multiArrayConstraint,
               input.shape.map(\.intValue) == [1, 2, Self.segmentFrames], input.dataType == .float32,

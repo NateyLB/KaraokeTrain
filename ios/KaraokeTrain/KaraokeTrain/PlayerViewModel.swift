@@ -35,11 +35,10 @@ class PlayerViewModel: ObservableObject {
     private let webServerURL = ServerConfiguration.web
 
 
-    var api: NativeAPI {
-        NativeAPI(backend: ServerConfiguration.legacyDownloader,
-                  web: webServerURL,
-                  secret: ServerConfiguration.legacyDevelopmentSecret)
-    }
+    var serverURL: String { webServerURL }
+    private var currentJobID: String?
+    private var lyricsTask: Task<Void, Never>?
+    @Published private(set) var isRetryingLyrics = false
     private var player: AVPlayer?
     private var tapContext: AudioMixer.TapContext?
     private var timeObserverToken: Any?
@@ -77,9 +76,10 @@ class PlayerViewModel: ObservableObject {
         }
     }
 
-    func playTrack(_ track: Track, prepared: PreparedSong? = nil) {
+    func playTrack(_ track: Track, jobID: String? = nil) {
         stop()
         currentTrack = track
+        currentJobID = jobID ?? track.videoId
         lyrics = []
         lyricVersions = []
         selectedLyricsIndex = 0
@@ -91,36 +91,22 @@ class PlayerViewModel: ObservableObject {
         isProcessing = true
         UIApplication.shared.isIdleTimerDisabled = true
         let token = generation
-        let api = self.api
+        let service = ServerSongService(baseURL: webServerURL)
+        let selectedJobID = currentJobID ?? track.videoId
         processingTask = Task { [weak self] in
             do {
-                if let prepared {
-                    if let data = prepared.lyrics { try self?.acceptLyrics(data) }
-                    self?.lyricsError = prepared.lyricsWarning
-                } else {
-                try await NativeSeparationService.prepare(track: track, api: api) { [weak self] status, progress in
-                    await self?.updateProgress(status, progress * 0.7, token: token)
+                let prepared = try await service.waitForSong(jobID: selectedJobID) { [weak self] status, progress in
+                    await self?.updateProgress(status, progress, token: token)
                 }
                 try Task.checkCancellation()
-                // A transcription failure must not discard successfully cached audio.
-                do {
-                    let data = try await NativeSeparationService.lyrics(track: track, api: api) { [weak self] status, progress in
-                        await self?.updateProgress(status, 0.7 + progress * 0.25, token: token)
-                    }
-                    try Task.checkCancellation()
-                    guard let self, self.generation == token else { return }
-                    try self.acceptLyrics(data)
-                } catch {
-                    try Task.checkCancellation()
-                    guard let self, self.generation == token else { return }
-                    self.lyricsError = error.localizedDescription
-                }
-                }
                 guard let self, self.generation == token else { return }
-                self.processingStatus = "Loading cached audio…"
-                guard let url = URL(string: api.web + "/api/stems?jobId=\(track.videoId)&stem=multiplex") else {
-                    throw URLError(.badURL)
+                self.lyricsError = prepared.lyricsWarning
+                if let data = prepared.lyrics {
+                    do { try self.acceptLyrics(data) }
+                    catch { self.lyricsError = "Could not load synced lyrics. Audio is available." }
                 }
+                self.processingStatus = "Loading cached audio…"
+                let url = try service.audioURL(jobID: selectedJobID)
                 try await self.setupPlayer(with: url, token: token)
                 try Task.checkCancellation()
                 guard self.generation == token else { return }
@@ -170,14 +156,28 @@ class PlayerViewModel: ObservableObject {
     }
 
     func retryLyrics() {
-        guard let track = currentTrack, !isProcessing else { return }
-        // Reuses GCS stems: never repeats Demucs when audio is already cached.
-        playTrack(track)
+        guard let jobID = currentJobID, !isRetryingLyrics else { return }
+        let token = generation
+        let service = ServerSongService(baseURL: webServerURL)
+        isRetryingLyrics = true
+        lyricsTask = Task { [weak self] in
+            do {
+                let data = try await service.repairLyrics(jobID: jobID)
+                try Task.checkCancellation()
+                guard let self, self.generation == token else { return }
+                try self.acceptLyrics(data)
+                self.lyricsError = self.lyrics.isEmpty ? "No synced lyrics available." : nil
+            } catch {
+                guard !Task.isCancelled, self?.generation == token else { return }
+                self?.lyricsError = error.localizedDescription
+            }
+            if self?.generation == token { self?.isRetryingLyrics = false; self?.lyricsTask = nil }
+        }
     }
 
     func cancelProcessing() {
         stop()
-        processingError = "Processing stopped. Tap Retry when ready; completed GCS audio will be reused."
+        processingError = "Stopped waiting for this song. Preparation can continue on the server; retry when ready."
     }
 
     func handleBackground() {
@@ -188,6 +188,8 @@ class PlayerViewModel: ObservableObject {
         generation = UUID()
         processingTask?.cancel()
         processingTask = nil
+        lyricsTask?.cancel(); lyricsTask = nil
+        isRetryingLyrics = false
         isProcessing = false
         UIApplication.shared.isIdleTimerDisabled = false
         stopAudio()
@@ -301,6 +303,7 @@ class PlayerViewModel: ObservableObject {
     deinit {
         processingTask?.cancel()
         searchTask?.cancel()
+        lyricsTask?.cancel()
         if let timeObserverToken { player?.removeTimeObserver(timeObserverToken) }
         if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
     }

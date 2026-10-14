@@ -8,10 +8,6 @@
 	<string>Turn your spoken song requests into search text.</string>
 	<key>KaraokeServerURL</key>
 	<string>http://$(KARAOKE_SERVER_HOST):$(KARAOKE_SERVER_PORT)</string>
-	<key>KaraokeBackendURL</key>
-	<string>http://$(KARAOKE_SERVER_HOST):$(KARAOKE_DOWNLOADER_PORT)</string>
-	<key>KaraokeAPISecret</key>
-	<string>$(KARAOKE_API_SECRET)</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Connect to your karaoke server to process songs and stream audio and lyrics.</string>
 	<key>NSAppTransportSecurity</key>

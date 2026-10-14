@@ -150,9 +150,9 @@ struct QueueItemRow: View {
                     .font(.caption)
                     .foregroundColor(.white.opacity(0.6))
                     .lineLimit(1)
-                if let preparation, preparation.phase != .ready {
-                    Text(preparation.message).font(.caption2)
-                        .foregroundStyle(preparation.phase == .error ? .orange : .white.opacity(0.6))
+                if let detail = preparation?.message ?? qSong.jobStatus?.error ?? qSong.jobStatus?.message, status != "ready" {
+                    Text(detail).font(.caption2)
+                        .foregroundStyle(status == "error" ? .orange : .white.opacity(0.6))
                         .lineLimit(2)
                 }
             }

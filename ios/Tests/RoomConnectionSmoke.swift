@@ -10,6 +10,9 @@ struct RoomConnectionSmoke {
     @MainActor static func main() async throws {
         let server = CommandLine.arguments.dropFirst().first ?? "http://localhost:3000"
         let model = PartyViewModel(serverBaseURL: server)
+        guard await model.hostParty() else { throw StemSeparatorError.invalid(model.errorMessage ?? "Host failed") }
+        assert(model.isHosting && model.partyState?.id == model.roomCode)
+        model.leaveParty()
         guard await model.joinParty(code: "NSSE") else { throw StemSeparatorError.invalid(model.errorMessage ?? "Join failed") }
         defer { model.leaveParty() }
         let deadline = Date().addingTimeInterval(10)
@@ -30,6 +33,6 @@ struct RoomConnectionSmoke {
         assert(model.partyState?.settings?.vocalsVolume == volume)
         model.leaveParty()
         assert(model.connectionStatus == .disconnected && model.partyState == nil)
-        print("PASS: native join, live room SSE update and cancellation (isolated room NSSE)")
+        print("PASS: shared-API native host, join, live room SSE update and cancellation (isolated test rooms)")
     }
 }

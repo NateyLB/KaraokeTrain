@@ -1,6 +1,6 @@
 # Shared web and iOS backend proposal
 
-Status: October 14, 2026. The owner approved initially sharing the existing API with the native SwiftUI/AVFoundation app. Processing location remains under discussion; major architecture changes and deployment still require approval. No infrastructure has been changed.
+Status: October 14, 2026. The owner approved initially sharing the existing API with the native SwiftUI/AVFoundation app. The owner subsequently approved Mac mini processing first, plus an iPhone benchmark. Further major architecture changes and deployment still require approval. No infrastructure has been changed.
 
 ## Starting point
 

@@ -5,7 +5,6 @@ struct RoomView: View {
     @Environment(\.scenePhase) private var scenePhase
     @ObservedObject var partyViewModel: PartyViewModel
     @StateObject private var playerViewModel = PlayerViewModel()
-    @StateObject private var preparation = QueuePreparationModel()
     @State private var loadedSongID: String?
     @State private var lastRemoteSettings: Double = 0
     @State private var lastRemoteCommand: Double = 0
@@ -73,7 +72,7 @@ struct RoomView: View {
                                 .foregroundColor(.white)
                                 .bold()
                         }
-                        Text("Join: \(playerViewModel.api.web)/remote/\(partyViewModel.roomCode)")
+                        Text("Join: \(playerViewModel.serverURL)/remote/\(partyViewModel.roomCode)")
                             .font(.caption2).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
                         }
                     }
@@ -260,7 +259,7 @@ struct RoomView: View {
                     Spacer()
                     QueueView(partyViewModel: partyViewModel, isPresented: $showQueue,
                               preparationStates: queueStates,
-                              onRetry: retryPreparation, onCancel: cancelPreparation)
+                              onRetry: retryPreparation)
                         .frame(height: max(180, geometry.size.height * 0.5))
                         .transition(.move(edge: .bottom))
                 }
@@ -300,9 +299,8 @@ struct RoomView: View {
                 HStack {
                     Text(error).font(.caption).lineLimit(3)
                     Spacer()
-                    Button("Retry lyrics") {
-                        if let song = partyViewModel.partyState?.currentSong { preparation.retry(song.videoId) }
-                    }
+                    Button(playerViewModel.isRetryingLyrics ? "Retrying lyrics…" : "Retry lyrics") { playerViewModel.retryLyrics() }
+                        .disabled(playerViewModel.isRetryingLyrics)
                 }
                 .padding(10).background(.black.opacity(0.8)).foregroundStyle(.orange)
             } else if showsPlayback, let videoError, !hideVideo {
@@ -313,23 +311,21 @@ struct RoomView: View {
             }
             }
         }
-        .onChange(of: preparationSongs.map(\.id), initial: true) { _, _ in
-            reconcilePreparation()
-        }
-        .task(id: preparedCurrentSongID) {
-            playerViewModel.onSongEnded = {
-                Task { try? await partyViewModel.sendCommand(action: "next", payload: [:]) }
-            }
-            if let song = partyViewModel.partyState?.currentSong,
-               let prepared = preparation.prepared[song.videoId] { playCurrentSong(song, prepared: prepared) }
+        .onChange(of: partyViewModel.partyState?.currentSong?.id, initial: true) { _, _ in
+            playerViewModel.onSongEnded = { roomCommand("next") }
+            if let song = partyViewModel.partyState?.currentSong { playCurrentSong(song) }
             else { loadedSongID = nil; playerViewModel.stop() }
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .background { preparation.suspend(); playerViewModel.handleBackground() }
-            if phase == .active { preparation.resume(); DeviceOrientation.request(roomOrientation) }
+            if phase == .background { playerViewModel.handleBackground() }
+            if phase == .active {
+                DeviceOrientation.request(roomOrientation)
+                if !playerViewModel.isReadyForPlayback, !playerViewModel.isProcessing,
+                   let song = partyViewModel.partyState?.currentSong { playCurrentSong(song) }
+            }
         }
-        .onChange(of: preparation.activeID) { _, _ in updateIdleTimer() }
         .onChange(of: playerViewModel.isProcessing) { _, _ in updateIdleTimer() }
+        .onChange(of: playerViewModel.isPlaying) { _, _ in updateIdleTimer() }
         .onChange(of: playbackSnapshot) { _, value in
             if value == remoteAppliedSnapshot { remoteAppliedSnapshot = nil; return }
             guard showsPlayback else { return }
@@ -352,7 +348,6 @@ struct RoomView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)) { _ in
-            preparation.suspend()
             if playerViewModel.isProcessing { playerViewModel.cancelProcessing() }
         }
         .fullScreenCover(isPresented: $showSearch, onDismiss: { DeviceOrientation.request(roomOrientation) }) {
@@ -361,16 +356,16 @@ struct RoomView: View {
             })
         }
         .onDisappear {
-            if !showSearch { preparation.stop(); playerViewModel.stop() }
+            if !showSearch { playerViewModel.stop() }
         }
     }
 
-    private func playCurrentSong(_ partySong: PartySong, prepared: PreparedSong) {
+    private func playCurrentSong(_ partySong: PartySong) {
         loadedSongID = partySong.id
         videoError = nil
         let safeDuration = partySong.duration.isFinite ? Int(min(86_400, max(0, partySong.duration))) : 0
         let track = Track(videoId: partySong.videoId, title: partySong.title, artist: partySong.artist, duration: safeDuration, thumbnail: partySong.thumbnail)
-        playerViewModel.playTrack(track, prepared: prepared)
+        playerViewModel.playTrack(track, jobID: partySong.jobId)
     }
 
     private var showsPlayback: Bool {
@@ -386,20 +381,15 @@ struct RoomView: View {
         (partyViewModel.partyState?.currentSong.map { [$0] } ?? []) + (partyViewModel.partyState?.queue ?? [])
     }
 
-    private var preparedCurrentSongID: String? {
-        guard let song = partyViewModel.partyState?.currentSong, preparation.prepared[song.videoId] != nil else { return nil }
-        return song.id
-    }
-
     private var queueStates: [String: SongPreparationState] {
-        var states = preparation.states
-        if let song = partyViewModel.partyState?.currentSong,
-           states[song.videoId]?.phase == .ready, !showsPlayback {
-            states[song.videoId] = SongPreparationState(
-                phase: playerViewModel.processingError == nil ? .processing : .error,
-                progress: 0.98, message: playerViewModel.processingError ?? "Loading cached audio…")
+        guard let song = partyViewModel.partyState?.currentSong else { return [:] }
+        if let error = playerViewModel.processingError {
+            return [song.videoId: SongPreparationState(phase: .error, message: error)]
         }
-        return states
+        if song.jobStatus?.status == "ready", !showsPlayback {
+            return [song.videoId: SongPreparationState(phase: .processing, progress: 0.98, message: "Loading cached audio…")]
+        }
+        return [:]
     }
 
     private var displayQueueCount: Int {
@@ -414,44 +404,18 @@ struct RoomView: View {
     }
 
     private func retryPreparation(_ id: String) {
-        if let song = partyViewModel.partyState?.currentSong, song.videoId == id,
-           let prepared = preparation.prepared[id] { playCurrentSong(song, prepared: prepared) }
-        else { preparation.retry(id) }
-    }
-
-    private func cancelPreparation(_ id: String) {
-        if partyViewModel.partyState?.currentSong?.videoId == id, playerViewModel.isProcessing {
-            playerViewModel.cancelProcessing()
+        guard let song = preparationSongs.first(where: { $0.videoId == id }) else { return }
+        Task {
+            do {
+                try await ServerSongService(baseURL: playerViewModel.serverURL).retry(
+                    Track(videoId: song.videoId, title: song.title, artist: song.artist))
+                if partyViewModel.partyState?.currentSong?.id == song.id { playCurrentSong(song) }
+            } catch { partyViewModel.errorMessage = error.localizedDescription }
         }
-        if preparation.states[id]?.phase != .ready { preparation.cancel(id) }
     }
 
     private func updateIdleTimer() {
-        UIApplication.shared.isIdleTimerDisabled = preparation.activeID != nil || playerViewModel.isProcessing
-    }
-
-    private func reconcilePreparation() {
-        let api = playerViewModel.api
-        let tracks = preparationSongs.map { song in
-            Track(videoId: song.videoId, title: song.title, artist: song.artist,
-                  duration: song.duration.isFinite ? Int(min(86_400, max(0, song.duration))) : 0, thumbnail: song.thumbnail)
-        }
-        preparation.reconcile(tracks) { track, progress in
-            try await NativeSeparationService.prepare(track: track, api: api) { status, value in
-                await progress(status, value * 0.7)
-            }
-            try Task.checkCancellation()
-            do {
-                let data = try await NativeSeparationService.lyrics(track: track, api: api) { status, value in
-                    await progress(status, 0.7 + value * 0.3)
-                }
-                return PreparedSong(lyrics: data, lyricsWarning: nil)
-            } catch {
-                try Task.checkCancellation()
-                // Match the web fallback: completed audio remains playable if lyrics fail.
-                return PreparedSong(lyrics: nil, lyricsWarning: error.localizedDescription)
-            }
-        }
+        UIApplication.shared.isIdleTimerDisabled = playerViewModel.isProcessing || playerViewModel.isPlaying
     }
 
     private struct PlaybackSnapshot: Equatable {

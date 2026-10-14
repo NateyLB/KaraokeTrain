@@ -53,15 +53,15 @@ final class VoiceSearchModel: ObservableObject {
                 installedTap = true
                 transcript = ""
                 isListening = true
-                recognition = recognizer.recognitionTask(with: request) { [weak self] result, failure in
+                recognition = recognizer.recognitionTask(with: request) { [weak model = self] result, failure in
                     let text = result?.bestTranscription.formattedString
                     let final = result?.isFinal == true
                     let message = failure?.localizedDescription
-                    Task { @MainActor in
-                        guard let self, self.generation == token else { return }
-                        if let text { self.transcript = text }
-                        if let message { self.error = message }
-                        if final || message != nil { self.stop() }
+                    Task { @MainActor [weak model] in
+                        guard let model, model.generation == token else { return }
+                        if let text { model.transcript = text }
+                        if let message { model.error = message }
+                        if final || message != nil { model.stop() }
                     }
                 }
                 engine.prepare()

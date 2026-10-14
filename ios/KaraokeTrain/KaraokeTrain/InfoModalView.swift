@@ -2,6 +2,7 @@ import SwiftUI
 
 struct InfoModalView: View {
     @Binding var isInfoOpen: Bool
+    @State private var showBenchmark = false
 
     var body: some View {
         ZStack {
@@ -72,6 +73,10 @@ struct InfoModalView: View {
                         )
                     }
                     .padding(.bottom, 20)
+                    #if DEBUG
+                    Button("Device stem benchmark") { showBenchmark = true }
+                        .buttonStyle(.bordered)
+                    #endif
                 }
             }
             .padding(24)
@@ -88,6 +93,7 @@ struct InfoModalView: View {
             )
             .shadow(color: Color.black.opacity(0.5), radius: 20, x: 0, y: 10)
         }
+        .sheet(isPresented: $showBenchmark) { SeparationBenchmarkView() }
     }
 }
 
