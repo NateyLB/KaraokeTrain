@@ -1,5 +1,6 @@
 'use client';
-import { useState, useRef, useEffect } from 'react';
+import { useShallow } from 'zustand/react/shallow';
+import { useEffect } from 'react';
 import { Mic, MicOff, X, Waves, Sparkles, AlertCircle } from 'lucide-react';
 import useKaraokeStore from '../store/useKaraokeStore';
 import { useAudioAnalyzer } from '../hooks/useAudioAnalyzer';
@@ -17,7 +18,25 @@ export default function MicrophonePanel() {
     isMicExpanded, setIsMicExpanded,
     currentSongTime, guideNotes, partyState, isLoading,
     micVolume, setMicVolume
-  } = useKaraokeStore();
+  } = useKaraokeStore(useShallow(state => ({
+    vocalsEnabled: state.vocalsEnabled,
+    vocalsVolume: state.vocalsVolume,
+    setVocalsVolume: state.setVocalsVolume,
+    echoOn: state.echoOn,
+    setEchoOn: state.setEchoOn,
+    autoTuneOn: state.autoTuneOn,
+    setAutoTuneOn: state.setAutoTuneOn,
+    echoCancellationOn: state.echoCancellationOn,
+    setEchoCancellationOn: state.setEchoCancellationOn,
+    isMicExpanded: state.isMicExpanded,
+    setIsMicExpanded: state.setIsMicExpanded,
+    currentSongTime: state.currentSongTime,
+    guideNotes: state.guideNotes,
+    partyState: state.partyState,
+    isLoading: state.isLoading,
+    micVolume: state.micVolume,
+    setMicVolume: state.setMicVolume
+  })));
 
   // === Own the mic hook ===
   const {
@@ -40,25 +59,22 @@ export default function MicrophonePanel() {
   // === Bridge store → mic state (inbound: remote toggle → actual mic) ===
   const storeMicEnabled = useKaraokeStore(s => s.micEnabled);
   useEffect(() => {
-    if (storeMicEnabled && !isListening) {
-      startListening(echoCancellationOn);
-    } else if (!storeMicEnabled && isListening) {
+    if (storeMicEnabled) {
+      startListening(useKaraokeStore.getState().echoCancellationOn);
+    } else if (!storeMicEnabled) {
       stopListening();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storeMicEnabled]);
+  }, [storeMicEnabled, startListening, stopListening]);
 
   // === Dynamic Echo Cancellation update ===
   useEffect(() => {
     setEchoCancellation(echoCancellationOn);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [echoCancellationOn]);
+  }, [echoCancellationOn, setEchoCancellation]);
 
   // === Echo sync ===
   useEffect(() => {
     setEchoEnabled(echoOn);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [echoOn]);
+  }, [echoOn, setEchoEnabled]);
 
   // === AutoTune target pitch ===
   useEffect(() => {
@@ -77,8 +93,7 @@ export default function MicrophonePanel() {
         setVocoderTargetFrequency(0);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoTuneOn, isListening, guideNotes, currentSongTime]);
+  }, [autoTuneOn, isListening, guideNotes, currentSongTime, setVocoderTargetFrequency]);
 
   // === Stop mic when no song is in the queue ===
   useEffect(() => {

@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
-import { runWhisper } from '../../../../lib/whisper_runner';
-import { isValidJobId } from '../../../../lib/validators';
-import { checkCache, uploadJson } from '../../../../lib/storage';
-import { checkRateLimit, getClientIp } from '../../../../lib/rateLimiter';
-import path from 'path';
-import fs from 'fs';
+import { runLyricsEngine } from '../../../../lib/lyrics/engine';
+import { isValidJobId } from '../../../../lib/http/validators';
+import { checkCache, getSavedTranscription } from '../../../../lib/storage/index';
+import { fetchLyrics } from '../../../../lib/lyrics/candidates';
+import { saveLyricsResult } from '../../../../lib/lyrics/results';
+import { checkRateLimit, getClientIp } from '../../../../lib/http/rateLimiter';
+import { readJsonObject } from '../../../../lib/http/requestBody';
+import { processingScheduler } from '../../../../lib/processing/index';
 
 
 export async function POST(request) {
@@ -16,40 +18,25 @@ export async function POST(request) {
   }
 
   try {
-    const body = await request.json();
-    const { jobId, plainLyrics, syncedLyrics } = body;
+    const body = await readJsonObject(request);
+    const { jobId } = body;
 
     if (!jobId || !isValidJobId(jobId)) {
       return NextResponse.json({ error: 'A valid Job ID is required' }, { status: 400 });
     }
 
-    const lyricsPayload = syncedLyrics 
-      ? { syncedLyrics, plainLyrics } 
-      : plainLyrics;
-
-    const result = await runWhisper(jobId, lyricsPayload);
-    
-    // Cache the fallback results so we don't have to run Whisper again next time
-    if (result && result.lyrics) {
-      const existingMetadata = await checkCache(jobId) || { title: 'Unknown', artist: 'Unknown' };
-      existingMetadata.lyrics = result.lyrics;
-      existingMetadata.source = result.source;
-      
-      const uploadDir = path.join(process.cwd(), 'uploads', jobId);
-      if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-      fs.writeFileSync(path.join(uploadDir, 'metadata.json'), JSON.stringify(existingMetadata, null, 2));
-      
-      try {
-        await uploadJson(existingMetadata, `processedSongs/${jobId}/metadata.json`);
-      } catch(e) {
-        console.error("Failed to upload fallback metadata to GCS:", e);
-      }
-    }
-
-    return NextResponse.json(result);
+    const existingMetadata = await checkCache(jobId);
+    if (!existingMetadata) return NextResponse.json({ error: 'Processed song not found' }, { status: 404 });
+    // Resolve candidates on the server; caller-provided lyrics cannot bypass identity matching.
+    const candidates = await fetchLyrics(existingMetadata.title, existingMetadata.artist);
+    const transcription = await getSavedTranscription(jobId);
+    const result = await processingScheduler.submit(`lyrics:${jobId}`, () => runLyricsEngine(jobId, candidates, null, { transcription }));
+    const saved = await saveLyricsResult(jobId, existingMetadata, result);
+    const { transcription: _transcription, ...response } = result;
+    return NextResponse.json({ ...response, lyricsRevision: saved.lyricsRevision });
 
   } catch (err) {
     console.error('Lyrics sync error:', err);
-    return NextResponse.json({ error: 'An internal error occurred' }, { status: 500 });
+    return NextResponse.json({ error: err.status >= 400 && err.status < 500 ? err.message : 'An internal error occurred' }, { status: err.status || 500 });
   }
 }

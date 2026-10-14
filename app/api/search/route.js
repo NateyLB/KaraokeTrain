@@ -1,5 +1,5 @@
-import { searchYouTube } from '../../../lib/youtube';
-import { checkRateLimit, getClientIp } from '../../../lib/rateLimiter';
+import { searchYouTube } from '../../../lib/search/youtube';
+import { checkRateLimit, getClientIp } from '../../../lib/http/rateLimiter';
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);

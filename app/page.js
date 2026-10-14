@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { Music2, Tv, Smartphone } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { getAudioRuntime } from '../lib/audio/runtime';
+import { isValidPartyId } from '../lib/http/validators';
 import OverlayButtons from '../components/OverlayButtons';
 
 export default function Home() {
@@ -15,13 +17,8 @@ export default function Home() {
     
     // Unlock Web Audio API synchronously inside this user gesture!
     try {
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
-      if (!window.__karaokeAudioCtx) {
-        window.__karaokeAudioCtx = new AudioContext({ latencyHint: 'interactive' });
-      }
-      if (window.__karaokeAudioCtx.state === 'suspended') {
-        window.__karaokeAudioCtx.resume().catch(() => {});
-      }
+      const { context } = getAudioRuntime();
+      if (context.state === 'suspended') context.resume().catch(() => {});
     } catch(e) {}
 
     router.push(`/room/${code}`);
@@ -29,8 +26,9 @@ export default function Home() {
 
   const joinParty = (e) => {
     e.preventDefault();
-    if (joinCode.trim().length >= 4) {
-      router.push(`/remote/${joinCode.toUpperCase()}`);
+    const id = joinCode.trim().toUpperCase();
+    if (isValidPartyId(id)) {
+      router.push(`/remote/${id}`);
     }
   };
 
@@ -77,15 +75,19 @@ export default function Home() {
               type="text" 
               className="input-field" 
               placeholder="Enter room code..." 
+              aria-label="Room code"
               value={joinCode}
-              onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-              maxLength={12}
+              onChange={(e) => setJoinCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+              maxLength={4}
+              autoCapitalize="characters"
+              autoComplete="off"
+              spellCheck={false}
               style={{ textAlign: 'center', letterSpacing: '0.5rem', fontWeight: 'bold', fontSize: '1.2rem' }}
             />
             <button 
               type="submit" 
               className="btn-primary"
-              disabled={joinCode.length < 4}
+              disabled={!isValidPartyId(joinCode)}
             >
               Join
             </button>

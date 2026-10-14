@@ -1,20 +1,25 @@
 node_modules
 .next
 .git
-.env
-.env.local
+.env*
 .venv
+venv
+venv-asr
+models
 uploads/*
 !uploads/.gitkeep
+testout
+*.log
+__pycache__
 
-# Test files and scripts
+# Tests, downloads and local scratch artifacts
 test*
 *.m4a
 *.py
+!lib/**/*.py
 scratch/
-server.log
 
-# Deployment and config files not needed in image
+# Python runtime scripts under lib/ are required in the image.
 deploy.sh
 cors.json
 CLAUDE.md

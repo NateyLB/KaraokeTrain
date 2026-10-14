@@ -46,3 +46,10 @@ testout/
 *.m4a
 
 venv/
+venv-asr/
+__pycache__/
+*.py[cod]
+*.log
+
+# Downloaded processing model weights
+models/

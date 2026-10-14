@@ -10,6 +10,11 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Local Python runtimes and downloaded models are dependencies, not source.
+    "venv/**",
+    "venv-asr/**",
+    "models/**",
+    "uploads/**",
   ]),
 ]);
 

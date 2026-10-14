@@ -1,154 +1,17 @@
 "use client";
 
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import { Search, Music2, ChevronRight, ChevronDown, Music, Sparkles, Mic } from 'lucide-react';
-import useKaraokeStore from '../store/useKaraokeStore';
+import { useSongSearch } from '../hooks/useSongSearch';
+import SongSearchResult from './SongSearchResult';
 
 export default function SearchBar({ onSelect, defaultCatalogOpen = true }) {
-  const { partyState } = useKaraokeStore();
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [hasSearched, setHasSearched] = useState(false);
-  const [isAskingDJ, setIsAskingDJ] = useState(false);
-  const [djResponse, setDjResponse] = useState(null);
-  const [isListening, setIsListening] = useState(false);
-  const [catalog, setCatalog] = useState([]);
-  const [isLoadingCatalog, setIsLoadingCatalog] = useState(true);
   const [isCatalogOpen, setIsCatalogOpen] = useState(defaultCatalogOpen);
-  const recognitionRef = useRef(null);
-  const inputRef = useRef(null);
-
-  // Fetch catalog on mount
-  useEffect(() => {
-    async function fetchCatalog() {
-      try {
-        const res = await fetch('/api/catalog');
-        const data = await res.json();
-        setCatalog(Array.isArray(data) ? data : []);
-      } catch (err) {
-        console.error('Failed to fetch catalog:', err);
-      } finally {
-        setIsLoadingCatalog(false);
-      }
-    }
-    fetchCatalog();
-  }, []);
-
-  const toggleListening = () => {
-    if (isListening) {
-      recognitionRef.current?.stop();
-      setIsListening(false);
-      return;
-    }
-
-    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-      alert('Voice search is not supported in this browser. Try Chrome or Safari.');
-      return;
-    }
-
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const recognition = new SpeechRecognition();
-    recognitionRef.current = recognition;
-    
-    recognition.continuous = false;
-    recognition.interimResults = true;
-
-    recognition.onstart = () => {
-      setIsListening(true);
-      setQuery('');
-    };
-
-    recognition.onresult = (event) => {
-      let transcript = '';
-      for (let i = 0; i < event.results.length; ++i) {
-        transcript += event.results[i][0].transcript;
-      }
-      setQuery(transcript);
-    };
-
-    recognition.onerror = (event) => {
-      console.error('Speech recognition error:', event.error);
-      setIsListening(false);
-    };
-
-    recognition.onend = () => {
-      setIsListening(false);
-    };
-
-    try {
-      recognition.start();
-    } catch (e) {
-      console.error('Failed to start speech recognition:', e);
-      setIsListening(false);
-    }
-  };
-
-  const askDJ = async (promptText) => {
-    if (isAskingDJ) return;
-    
-    setIsAskingDJ(true);
-    setDjResponse(null);
-    setHasSearched(true);
-    setResults([]);
-    
-    try {
-      const state = useKaraokeStore.getState();
-      const res = await fetch('/api/dj', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: promptText,
-          history: state.partyHistory || [],
-          currentSong: state.currentSong,
-          queue: state.queue || []
-        })
-      });
-      const data = await res.json();
-      if (!data.error) {
-        setDjResponse(data);
-      } else {
-        console.error("DJ error:", data.error);
-      }
-    } catch (err) {
-      console.error('Ask DJ failed:', err);
-    } finally {
-      setIsAskingDJ(false);
-    }
-  };
-
-  const handleSearch = async (e, overrideQuery = null, forceYoutube = false) => {
-    e?.preventDefault?.();
-    const activeQuery = overrideQuery !== null ? overrideQuery : query;
-    if (!activeQuery.trim()) return;
-
-    if (!forceYoutube) {
-      // Smart Routing Heuristic:
-      // Route to DJ if it starts with a question/request word, contains a question mark, or is a long sentence.
-      const isQuestionWord = /^(what|can|should|could|would|recommend|suggest|how|give|some|play|any|good|who|need)\b/i.test(activeQuery.trim());
-      const hasQuestionMark = activeQuery.includes('?');
-      const isConversational = activeQuery.trim().split(/\s+/).length >= 6;
-
-      if (isQuestionWord || hasQuestionMark || isConversational) {
-        return askDJ(activeQuery);
-      }
-    }
-
-    // Otherwise route to YouTube search
-    setIsSearching(true);
-    setHasSearched(true);
-    setDjResponse(null);
-
-    try {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(activeQuery)}`);
-      const data = await res.json();
-      setResults(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error('Search failed:', err);
-      setResults([]);
-    } finally {
-      setIsSearching(false);
-    }
+  const { query, setQuery, results, clearResults, isSearching, hasSearched, isAskingDJ, djResponse,
+    isListening, toggleListening, catalog, isLoadingCatalog, catalogError, reloadCatalog, searchError, handleSearch } = useSongSearch();
+  const handleSelect = async track => {
+    const result = await onSelect(track);
+    if (result !== null) clearResults();
   };
 
   return (
@@ -162,9 +25,9 @@ export default function SearchBar({ onSelect, defaultCatalogOpen = true }) {
           />
           <input
             type="text"
-            ref={inputRef}
             className="input-field"
             placeholder="Search or ask the DJ..."
+            aria-label="Search songs or ask the DJ"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
@@ -225,21 +88,22 @@ export default function SearchBar({ onSelect, defaultCatalogOpen = true }) {
           </div>
         </div>
       </form>
+      {searchError && <p role="alert" style={{ color: '#ef4444' }}>{searchError}</p>}
 
       <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
         {!hasSearched && (
           <div style={{ marginTop: '0.5rem' }}>
-            <div 
-              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: isCatalogOpen ? '1rem' : '0', paddingLeft: '0.5rem', cursor: 'pointer' }}
+            <button type="button" aria-expanded={isCatalogOpen}
+              style={{ width: '100%', background: 'none', border: 0, textAlign: 'left', display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: isCatalogOpen ? '1rem' : '0', padding: '0 0 0 0.5rem', cursor: 'pointer' }}
               onClick={() => setIsCatalogOpen(!isCatalogOpen)}
             >
               <Music2 size={18} color="var(--primary-accent)" />
-              <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-main)', margin: 0 }}>Ready to Sing</h3>
+              <span style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-main)', margin: 0 }}>Ready to Sing</span>
               <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginLeft: 'auto', display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                <span>{isLoadingCatalog ? 'Loading...' : `${catalog.length} songs`}</span>
+                <span>{isLoadingCatalog ? 'Loading...' : catalogError ? 'Unavailable' : `${catalog.length} songs`}</span>
                 {isCatalogOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
               </span>
-            </div>
+            </button>
             
             <div style={{ 
               maxHeight: isCatalogOpen ? '300px' : '0px', 
@@ -247,7 +111,12 @@ export default function SearchBar({ onSelect, defaultCatalogOpen = true }) {
               transition: 'all 0.3s ease-in-out',
               opacity: isCatalogOpen ? 1 : 0
             }}>
-              {isLoadingCatalog && catalog.length === 0 ? (
+              {catalogError ? (
+                <div role="alert" style={{ textAlign: 'center', margin: '1rem 0' }}>
+                  <p className="body-text">{catalogError}</p>
+                  <button type="button" className="btn-secondary" style={{ marginTop: '0.75rem' }} onClick={reloadCatalog}>Retry</button>
+                </div>
+              ) : isLoadingCatalog && catalog.length === 0 ? (
                  <div style={{ textAlign: 'center', opacity: 0.4, marginTop: '1rem', marginBottom: '1rem' }}>
                    <Music size={40} style={{ margin: '0 auto', marginBottom: '1rem' }} className="animate-pulse-glow" />
                    <p className="body-text">Loading catalog...</p>
@@ -259,53 +128,7 @@ export default function SearchBar({ onSelect, defaultCatalogOpen = true }) {
                  </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: '230px', overflowY: 'auto', paddingRight: '0.2rem' }}>
-                  {catalog.map((track, i) => (
-                  <div
-                    key={track.videoId || i}
-                    className="glass-panel animate-fade-in"
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      padding: '0.75rem',
-                      gap: '1rem',
-                      animationDelay: `${i * 0.05}s`,
-                      cursor: 'pointer',
-                      transition: 'background 0.2s ease',
-                      borderLeft: '3px solid var(--primary-accent)'
-                    }}
-                    onClick={() => {
-                      onSelect(track);
-                      setQuery('');
-                      setResults([]);
-                      setHasSearched(false);
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.07)'}
-                    onMouseLeave={e => e.currentTarget.style.background = ''}
-                  >
-                    {track.albumArt ? (
-                      <img
-                        src={track.albumArt}
-                        alt={track.title}
-                        style={{ width: '56px', height: '42px', borderRadius: '4px', objectFit: 'cover', flexShrink: 0 }}
-                      />
-                    ) : (
-                      <div style={{ width: '56px', height: '42px', borderRadius: '4px', background: 'var(--glass-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <Music2 size={16} color="var(--text-muted)" />
-                      </div>
-                    )}
-
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <h3 style={{ fontSize: '0.9rem', fontWeight: 600, lineHeight: 1.3, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
-                        {track.title ? track.title.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>') : ''}
-                      </h3>
-                      <p className="body-text" style={{ fontSize: '0.75rem', marginTop: '0.1rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {track.artist ? track.artist.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>') : ''}
-                      </p>
-                    </div>
-
-                    <ChevronRight size={16} color="var(--text-muted)" style={{ flexShrink: 0 }} />
-                  </div>
-                ))}
+                  {catalog.map(track => <SongSearchResult key={track.videoId} track={track} compact onSelect={handleSelect} />)}
                 </div>
               )}
             </div>
@@ -336,7 +159,7 @@ export default function SearchBar({ onSelect, defaultCatalogOpen = true }) {
               <h3 style={{ fontSize: '1rem', fontWeight: 600, color: '#e9d5ff', margin: 0 }}>Session DJ</h3>
             </div>
             <p className="body-text" style={{ fontSize: '0.95rem', marginBottom: '1.5rem', color: '#f3e8ff' }}>
-              "{djResponse.message}"
+              &quot;{djResponse.message}&quot;
             </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
               {djResponse.recommended_queries?.map((rec, i) => (
@@ -367,52 +190,7 @@ export default function SearchBar({ onSelect, defaultCatalogOpen = true }) {
           <p className="body-text" style={{ textAlign: 'center', marginTop: '2rem' }}>No results found. Try a different search.</p>
         )}
 
-        {!isSearching && results.map((track, i) => (
-          <div
-            key={track.videoId || i}
-            className="glass-panel animate-fade-in"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              padding: '0.875rem',
-              gap: '1rem',
-              animationDelay: `${i * 0.07}s`,
-              cursor: 'pointer',
-              transition: 'background 0.2s ease',
-            }}
-            onClick={() => {
-              onSelect(track);
-              setQuery('');
-              setResults([]);
-              setHasSearched(false);
-            }}
-            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.07)'}
-            onMouseLeave={e => e.currentTarget.style.background = ''}
-          >
-            {track.albumArt ? (
-              <img
-                src={track.albumArt}
-                alt={track.title}
-                style={{ width: '64px', height: '48px', borderRadius: '6px', objectFit: 'cover', flexShrink: 0 }}
-              />
-            ) : (
-              <div style={{ width: '64px', height: '48px', borderRadius: '6px', background: 'var(--glass-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <Music2 size={20} color="var(--text-muted)" />
-              </div>
-            )}
-
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <h3 style={{ fontSize: '0.95rem', fontWeight: 600, lineHeight: 1.3, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
-                {track.title ? track.title.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>') : ''}
-              </h3>
-              <p className="body-text" style={{ fontSize: '0.8rem', marginTop: '0.2rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {track.artist ? track.artist.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>') : ''}
-              </p>
-            </div>
-
-            <ChevronRight size={18} color="var(--text-muted)" style={{ flexShrink: 0 }} />
-          </div>
-        ))}
+        {!isSearching && results.map(track => <SongSearchResult key={track.videoId} track={track} onSelect={handleSelect} />)}
         </div>
       </div>
     </div>

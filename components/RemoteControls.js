@@ -1,5 +1,7 @@
 'use client';
+import { useShallow } from 'zustand/react/shallow';
 import { Play, Pause, SkipForward, SkipBack, Mic, MicOff, Volume2, VolumeX, Video, Waves, Sparkles, Settings } from 'lucide-react';
+import { usePartyActions } from '../hooks/usePartyActions';
 import useKaraokeStore from '../store/useKaraokeStore';
 
 export default function RemoteControls({ roomId }) {
@@ -7,28 +9,34 @@ export default function RemoteControls({ roomId }) {
     isPlaying, setIsPlaying, vocalsEnabled, setVocalsEnabled, vocalsVolume, setVocalsVolume,
     lyricsOffset, setLyricsOffset, micEnabled, setMicEnabled, micVolume, setMicVolume,
     echoOn, setEchoOn, autoTuneOn, setAutoTuneOn, isVideoVisible, setIsVideoVisible,
-    firstValidTime
-  } = useKaraokeStore();
+    firstValidTime, partyState
+  } = useKaraokeStore(useShallow(state => ({
+    isPlaying: state.isPlaying,
+    setIsPlaying: state.setIsPlaying,
+    vocalsEnabled: state.vocalsEnabled,
+    setVocalsEnabled: state.setVocalsEnabled,
+    vocalsVolume: state.vocalsVolume,
+    setVocalsVolume: state.setVocalsVolume,
+    lyricsOffset: state.lyricsOffset,
+    setLyricsOffset: state.setLyricsOffset,
+    micEnabled: state.micEnabled,
+    setMicEnabled: state.setMicEnabled,
+    micVolume: state.micVolume,
+    setMicVolume: state.setMicVolume,
+    echoOn: state.echoOn,
+    setEchoOn: state.setEchoOn,
+    autoTuneOn: state.autoTuneOn,
+    setAutoTuneOn: state.setAutoTuneOn,
+    isVideoVisible: state.isVideoVisible,
+    setIsVideoVisible: state.setIsVideoVisible,
+    firstValidTime: state.firstValidTime,
+    partyState: state.partyState
+  })));
 
-  const handleNextSong = async () => {
-    try {
-      await fetch('/api/party', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'remoteControl', id: roomId, command: 'next' })
-      });
-    } catch (err) { console.error(err); }
-  };
-
-  const handlePreviousSong = async () => {
-    try {
-      await fetch('/api/party', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'remoteControl', id: roomId, command: 'previous' })
-      });
-    } catch (err) { console.error(err); }
-  };
+  const canPlay = partyState?.currentSong?.jobStatus?.status === 'ready';
+  const { remoteCommand, nextSong, previousSong } = usePartyActions(roomId);
+  const handleNextSong = () => nextSong();
+  const handlePreviousSong = () => previousSong();
 
   return (
     <div style={{ background: 'rgba(20, 20, 25, 0.8)', backdropFilter: 'blur(10px)', padding: '1.5rem', borderRadius: '1rem', border: '1px solid var(--glass-border)', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
@@ -37,7 +45,7 @@ export default function RemoteControls({ roomId }) {
             <button onClick={handlePreviousSong} className="btn-secondary" style={{ padding: '0.75rem', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '3.2rem', height: '3.2rem' }} title="Previous Song">
                 <SkipBack size={20} fill="currentColor" />
             </button>
-            <button onClick={() => setIsPlaying(!isPlaying)} className="btn-primary" style={{ padding: '0.75rem', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '4rem', height: '4rem', boxShadow: '0 0.5rem 1rem rgba(0,0,0,0.3)' }}>
+            <button disabled={!canPlay} onClick={() => setIsPlaying(!isPlaying)} title={isPlaying ? 'Pause' : 'Play'} className="btn-primary" style={{ padding: '0.75rem', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '4rem', height: '4rem', boxShadow: '0 0.5rem 1rem rgba(0,0,0,0.3)' }}>
                 {isPlaying ? <Pause size={28} fill="currentColor" /> : <Play size={28} fill="currentColor" style={{ marginLeft: '0.2rem' }} />}
             </button>
             <button onClick={handleNextSong} className="btn-secondary" style={{ padding: '0.75rem', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '3.2rem', height: '3.2rem' }} title="Next Song">
@@ -94,13 +102,7 @@ export default function RemoteControls({ roomId }) {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--glass-bg)', padding: '0.5rem 1rem', borderRadius: '99px', border: '1px solid var(--glass-border)', marginTop: '0.5rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>Lyrics Sync</span>
-                    <button onClick={() => {
-                        fetch('/api/party', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ action: 'remoteControl', id: roomId, command: 'alignStart' })
-                        });
-                    }} style={{ padding: '0.2rem 0.6rem', borderRadius: '99px', fontSize: '0.7rem', fontWeight: 'bold', background: 'var(--secondary-accent)', color: '#1a1a1a', border: 'none', cursor: 'pointer' }}>
+                    <button onClick={() => remoteCommand('alignStart')} style={{ padding: '0.2rem 0.6rem', borderRadius: '99px', fontSize: '0.7rem', fontWeight: 'bold', background: 'var(--secondary-accent)', color: '#1a1a1a', border: 'none', cursor: 'pointer' }}>
                         Align Start
                     </button>
                 </div>

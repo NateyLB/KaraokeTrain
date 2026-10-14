@@ -1,10 +1,10 @@
 import express from 'express';
 import { spawn } from 'child_process';
 import crypto from 'crypto';
+import { isValidVideoId } from './lib/http/validators.js';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
-const browser = process.env.COOKIES_BROWSER || 'chrome';
 const DOWNLOADER_SECRET = process.env.DOWNLOADER_SECRET;
 
 if (!DOWNLOADER_SECRET) {
@@ -13,7 +13,6 @@ if (!DOWNLOADER_SECRET) {
 }
 
 app.use((req, res, next) => {
-  console.log(`[DOWNLOADER] Incoming request headers:`, req.headers);
   const authHeader = req.headers['authorization'];
   const provided = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7) : null;
   
@@ -23,12 +22,13 @@ app.use((req, res, next) => {
   }
 
   // Prevent timingSafeEqual from throwing an error if lengths differ
-  if (provided.length !== DOWNLOADER_SECRET.length) {
-    console.warn(`[DOWNLOADER] ⚠️  Secret length mismatch from ${req.ip}. Expected ${DOWNLOADER_SECRET.length}, got ${provided.length}`);
-    return res.status(403).json({ error: 'Forbidden: Invalid secret length' });
+  const providedBytes = Buffer.from(provided);
+  const secretBytes = Buffer.from(DOWNLOADER_SECRET);
+  if (providedBytes.length !== secretBytes.length) {
+    return res.status(403).json({ error: 'Forbidden: Invalid secret' });
   }
 
-  if (!crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(DOWNLOADER_SECRET))) {
+  if (!crypto.timingSafeEqual(providedBytes, secretBytes)) {
     console.warn(`[DOWNLOADER] ⚠️  Secret value mismatch from ${req.ip}`);
     return res.status(403).json({ error: 'Forbidden: Invalid secret value' });
   }
@@ -38,7 +38,7 @@ app.use((req, res, next) => {
 
 app.get('/download', (req, res) => {
   const videoId = req.query.videoId;
-  if (!videoId || !/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
+  if (!isValidVideoId(videoId)) {
     return res.status(400).send('Invalid videoId');
   }
 
@@ -57,9 +57,10 @@ app.get('/download', (req, res) => {
 
   // Set response headers to stream audio
   res.setHeader('Content-Type', 'audio/mp4');
-  res.setHeader('Transfer-Encoding', 'chunked');
 
-  ytdlp.stdout.pipe(res);
+  // Wait for the process result before ending the response. Otherwise an
+  // empty/failed download can be returned as a successful audio stream.
+  ytdlp.stdout.pipe(res, { end: false });
 
   ytdlp.stderr.on('data', (data) => {
     console.error(`[yt-dlp stderr]: ${data}`);
@@ -69,26 +70,38 @@ app.get('/download', (req, res) => {
     if (code !== 0) {
       console.error(`[DOWNLOADER] yt-dlp failed with code ${code}`);
       if (!res.headersSent) {
-        res.status(500).send('Download failed');
+        res.status(502).type('text/plain').send('Download failed');
       } else {
-        res.end(); // End the stream if it already started
+        res.destroy(new Error('Download failed'));
       }
     } else {
       console.log(`[DOWNLOADER] Successfully streamed ${videoId}`);
+      res.end();
     }
   });
 
   ytdlp.on('error', (err) => {
     console.error('[DOWNLOADER] Spawn error:', err);
     if (!res.headersSent) {
-      res.status(500).send('Spawn error');
+      res.status(503).type('text/plain').send('Audio downloader is unavailable');
+    } else {
+      res.destroy(err);
     }
+  });
+
+  res.on('close', () => {
+    if (!res.writableEnded) ytdlp.kill('SIGTERM');
   });
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, error => {
+  if (error) return; // Express 5 forwards listen errors to this callback.
   console.log(`[DOWNLOADER] Local Downloader API running on http://localhost:${PORT}`);
-  console.log(`[DOWNLOADER] Using ${browser} for cookies.`);
+  console.log('[DOWNLOADER] YouTube audio is downloaded with yt-dlp.');
   console.log(`[DOWNLOADER] To expose this server to the internet via Cloudflare Tunnels:`);
   console.log(`[DOWNLOADER] cloudflared tunnel --url http://localhost:${PORT}`);
+});
+server.on('error', error => {
+  console.error(`[DOWNLOADER] Could not listen on port ${PORT}: ${error.code}`);
+  process.exitCode = 1;
 });

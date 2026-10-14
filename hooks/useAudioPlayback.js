@@ -1,27 +1,10 @@
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect, useCallback, useMemo } from 'react';
 import useKaraokeStore from '../store/useKaraokeStore';
-
-const safePlay = (audio) => {
-  if (!audio) return;
-  const promise = audio.play();
-  if (promise !== undefined) {
-    audio.__playPromise = promise;
-    promise.catch(e => {
-      if (e.name !== 'AbortError') console.warn('Audio play error:', e);
-    });
-  }
-};
-
-const safePause = (audio) => {
-  if (!audio) return;
-  if (audio.__playPromise !== undefined) {
-    audio.__playPromise.then(() => {
-      audio.pause();
-    }).catch(() => {});
-  } else {
-    audio.pause();
-  }
-};
+import { selectedLyrics } from '../lib/lyrics/timeline';
+import { MultiplexGraph } from '../lib/audio/MultiplexGraph';
+import { getAudioRuntime } from '../lib/audio/runtime';
+import { playMedia as safePlay, pauseMedia as safePause } from '../lib/audio/media';
+import { PartyClient } from '../lib/party/PartyClient';
 
 /**
  * Owns all audio playback state that is imperative / ref-based:
@@ -39,26 +22,46 @@ export function useAudioPlayback(roomId) {
   const ytPlayerRef = useRef(null);
   const timeUpdateInterval = useRef(null);
   const isPlayingRef = useRef(false);
+  const advanceInFlightRef = useRef(false);
+
+  const graphRef = useRef(null);
+  const client = useMemo(() => new PartyClient(roomId), [roomId]);
+
+  const wireWebAudio = useCallback(() => {
+    const audio = audioRefs.current.multiplex;
+    if (!audio) return;
+    try {
+      if (!graphRef.current) graphRef.current = new MultiplexGraph();
+      graphRef.current.attach(audio);
+      const { vocalsEnabled, vocalsVolume } = useKaraokeStore.getState();
+      graphRef.current.setVocals(vocalsEnabled, vocalsVolume);
+      const { context } = getAudioRuntime();
+      if (context.state === 'suspended') context.resume().catch(() => {});
+    } catch (error) { console.error('Audio routing failed:', error); }
+  }, []);
 
   // ---- helpers that read store at call-time (no stale closures) ----
 
+  const stopTimeUpdates = useCallback(() => {
+    cancelAnimationFrame(timeUpdateInterval.current);
+    timeUpdateInterval.current = null;
+  }, []);
+
   const startTimeUpdates = useCallback(() => {
-    clearInterval(timeUpdateInterval.current);
-    timeUpdateInterval.current = setInterval(() => {
+    stopTimeUpdates();
+    const tick = () => {
       const leader = audioRefs.current['multiplex'];
       if (!leader) return;
-      const current = leader.currentTime;
-      useKaraokeStore.getState().setCurrentSongTime(current);
-      if (leader.duration > 0 && current >= leader.duration - 1) {
-        handleNextSong();
-      }
-    }, 50);
-  }, []);
+      useKaraokeStore.getState().setCurrentSongTime(leader.currentTime);
+      timeUpdateInterval.current = requestAnimationFrame(tick);
+    };
+    timeUpdateInterval.current = requestAnimationFrame(tick);
+  }, [stopTimeUpdates]);
 
   // ---- public API ----
 
   const togglePlay = useCallback(() => {
-    const { stems, isPlaying, vocalsEnabled, vocalsVolume, setIsPlaying } =
+    const { stems, isPlaying, setIsPlaying } =
       useKaraokeStore.getState();
     if (!stems) return;
 
@@ -68,7 +71,7 @@ export function useAudioPlayback(roomId) {
       if (ytPlayerRef.current) {
         try { ytPlayerRef.current.pauseVideo(); } catch(e) {}
       }
-      clearInterval(timeUpdateInterval.current);
+      stopTimeUpdates();
       setIsPlaying(false);
       isPlayingRef.current = false;
     } else {
@@ -78,12 +81,6 @@ export function useAudioPlayback(roomId) {
       // Must resume AudioContext synchronously inside user gesture for mobile Safari/Chrome
       if (window.__karaokeAudioCtx && window.__karaokeAudioCtx.state === 'suspended') {
         window.__karaokeAudioCtx.resume().catch(e => console.warn("Failed to resume AudioContext", e));
-      }
-
-      // PLAY — apply vocal settings first to the web audio nodes
-      if (webAudioNodesRef.current && window.__karaokeAudioCtx) {
-        const { vocalGain } = webAudioNodesRef.current;
-        vocalGain.gain.setTargetAtTime(vocalsEnabled ? vocalsVolume : 0, window.__karaokeAudioCtx.currentTime || 0, 0.05);
       }
 
       setIsPlaying(true);
@@ -99,42 +96,29 @@ export function useAudioPlayback(roomId) {
       
       startTimeUpdates();
     }
-  }, [startTimeUpdates, wireWebAudio]);
+  }, [startTimeUpdates, stopTimeUpdates, wireWebAudio]);
 
-  const handleNextSong = useCallback(async () => {
-    Object.values(audioRefs.current).forEach(a => {
-      if (a) { safePause(a); a.currentTime = 0; }
-    });
-    clearInterval(timeUpdateInterval.current);
-    useKaraokeStore.getState().resetForNewSong();
-
-    await fetch('/api/party', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'next', id: roomId }),
-    });
-  }, [roomId]);
-
-  const handlePreviousSong = useCallback(async () => {
-    Object.values(audioRefs.current).forEach(a => {
-      if (a) { safePause(a); a.currentTime = 0; }
-    });
-    clearInterval(timeUpdateInterval.current);
-    useKaraokeStore.getState().resetForNewSong();
-
-    await fetch('/api/party', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'previous', id: roomId }),
-    });
-  }, [roomId]);
+  const advanceSong = useCallback(async action => {
+    if (advanceInFlightRef.current) return;
+    advanceInFlightRef.current = true;
+    try {
+      const party = await client.send(action, { expectedCurrentQueueId: useKaraokeStore.getState().partyState?.currentSong?.queueId ?? null });
+      useKaraokeStore.getState().setPartyState(party);
+    } catch (error) {
+      if (error.party?.id === roomId) useKaraokeStore.getState().setPartyState(error.party);
+      useKaraokeStore.getState().setToast(error.message);
+    } finally { advanceInFlightRef.current = false; }
+  }, [client, roomId]);
+  const handleNextSong = useCallback(() => advanceSong('next'), [advanceSong]);
+  const handlePreviousSong = useCallback(() => advanceSong('previous'), [advanceSong]);
 
   const handleAlignStart = useCallback(() => {
-    const { parsedLyrics, currentSongTime, setLyricsOffset } =
+    const { parsedLyrics, selectedVersionIdx, currentSongTime, setLyricsOffset } =
       useKaraokeStore.getState();
-    if (parsedLyrics.length > 0) {
-      const first = parsedLyrics.find(l => l.text.trim().length > 0) || parsedLyrics[0];
-      setLyricsOffset((currentSongTime - first.time).toFixed(2));
+    const lines = selectedLyrics(parsedLyrics, selectedVersionIdx);
+    const first = lines.find(line => line.text?.trim());
+    if (first) {
+      setLyricsOffset(Number((currentSongTime - (first.words?.[0]?.start ?? first.time)).toFixed(2)));
     }
   }, []);
 
@@ -166,7 +150,7 @@ export function useAudioPlayback(roomId) {
       // PAUSED
       setIsPlaying(false);
       isPlayingRef.current = false;
-      clearInterval(timeUpdateInterval.current);
+      stopTimeUpdates();
       if (audioRefs.current['multiplex'] && !audioRefs.current['multiplex'].paused) {
         safePause(audioRefs.current['multiplex']);
       }
@@ -176,7 +160,7 @@ export function useAudioPlayback(roomId) {
         safePause(audioRefs.current['multiplex']);
       }
     }
-  }, [startTimeUpdates]);
+  }, [startTimeUpdates, stopTimeUpdates, wireWebAudio]);
 
   // ---- internal effects ----
 
@@ -185,58 +169,15 @@ export function useAudioPlayback(roomId) {
   // However, we DO need to set up the Web Audio API routing for the multiplexed file.
   const stems = useKaraokeStore(s => s.stems);
   const isPlaying = useKaraokeStore(s => s.isPlaying);
-  const webAudioNodesRef = useRef(null);
-
-  const wireWebAudio = useCallback(() => {
-    const audioEl = audioRefs.current['multiplex'];
-    if (!audioEl) return;
-    
-    try {
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
-      if (!window.__karaokeAudioCtx) {
-        window.__karaokeAudioCtx = new AudioContext({ latencyHint: 'interactive' });
-      }
-      const ctx = window.__karaokeAudioCtx;
-
-      if (ctx.state === 'suspended') {
-        ctx.resume().catch(() => {});
-      }
-
-      if (!audioEl.__webAudioConnected) {
-        audioEl.__webAudioConnected = true;
-
-        const source = ctx.createMediaElementSource(audioEl);
-        
-        const splitter = ctx.createChannelSplitter(2);
-        source.connect(splitter);
-
-        const instrGain = ctx.createGain();
-        const vocalGain = ctx.createGain();
-
-        const merger = ctx.createChannelMerger(2);
-
-        splitter.connect(instrGain, 0);
-        instrGain.connect(merger, 0, 0); 
-        instrGain.connect(merger, 0, 1); 
-
-        splitter.connect(vocalGain, 1);
-        vocalGain.connect(merger, 0, 0); 
-        vocalGain.connect(merger, 0, 1); 
-
-        if (!window.__karaokeMediaStreamDest) {
-          window.__karaokeMediaStreamDest = ctx.createMediaStreamDestination();
-        }
-
-        merger.connect(ctx.destination);
-        merger.connect(window.__karaokeMediaStreamDest);
-
-        webAudioNodesRef.current = { instrGain, vocalGain };
-      }
-    } catch (e) {
-      console.error("Web Audio API failed to initialize:", e);
-    }
-  }, []);
-
+  useEffect(() => {
+    const audio = audioRefs.current.multiplex;
+    // Finish the final sung word; the old duration-minus-one check cut it off.
+    audio?.addEventListener('ended', handleNextSong);
+    return () => {
+      audio?.removeEventListener('ended', handleNextSong);
+      stopTimeUpdates();
+    };
+  }, [stems, handleNextSong, stopTimeUpdates]);
   // Pre-wire on mount if possible, and set up a global fallback unlock listener
   useEffect(() => {
     wireWebAudio();
@@ -272,20 +213,27 @@ export function useAudioPlayback(roomId) {
   const vocalsVolume = useKaraokeStore(s => s.vocalsVolume);
   
   useEffect(() => {
-    if (webAudioNodesRef.current && window.__karaokeAudioCtx) {
-      const { vocalGain } = webAudioNodesRef.current;
-      vocalGain.gain.setTargetAtTime(vocalsEnabled ? vocalsVolume : 0, window.__karaokeAudioCtx.currentTime || 0, 0.05);
-    }
+    graphRef.current?.setVocals(vocalsEnabled, vocalsVolume);
   }, [vocalsEnabled, vocalsVolume]);
+
+  useEffect(() => () => {
+    stopTimeUpdates();
+    Object.values(audioRefs.current).forEach(safePause);
+    graphRef.current?.detach();
+  }, [stopTimeUpdates]);
 
   // Prevent display from sleeping while song is playing
   useEffect(() => {
     let wakeLock = null;
+    let disposed = false;
 
     const requestWakeLock = async () => {
       if ('wakeLock' in navigator && isPlaying) {
         try {
-          wakeLock = await navigator.wakeLock.request('screen');
+          if (wakeLock && !wakeLock.released) return;
+          const lock = await navigator.wakeLock.request('screen');
+          if (disposed) await lock.release();
+          else wakeLock = lock;
         } catch (err) {
           console.warn('Wake Lock request failed:', err.name, err.message);
         }
@@ -304,7 +252,7 @@ export function useAudioPlayback(roomId) {
     };
 
     const handleVisibilityChange = () => {
-      if (wakeLock !== null && document.visibilityState === 'visible') {
+      if (!disposed && document.visibilityState === 'visible') {
         requestWakeLock();
       }
     };
@@ -317,12 +265,22 @@ export function useAudioPlayback(roomId) {
     }
 
     return () => {
+      disposed = true;
       releaseWakeLock();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [isPlaying]);
 
+  const registerMultiplexAudio = useCallback(element => {
+    if (audioRefs.current.multiplex !== element) {
+      safePause(audioRefs.current.multiplex);
+      graphRef.current?.detach();
+    }
+    audioRefs.current.multiplex = element;
+  }, []);
+
   return {
+    registerMultiplexAudio,
     togglePlay,
     handleNextSong,
     handlePreviousSong,

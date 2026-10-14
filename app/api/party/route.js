@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
-import { partyStore } from '../../../lib/partyStore';
-import { jobQueue } from '../../../lib/jobQueue';
-import { runBackgroundSeparation } from '../separate/start/route';
-import { isValidVideoId, isValidPartyId } from '../../../lib/validators';
-import { checkRateLimit, canStartJob, getClientIp } from '../../../lib/rateLimiter';
-import crypto from 'crypto';
-import fs from 'fs';
-import path from 'path';
+import { partyStore } from '../../../lib/party/partyStore';
+import { songProcessing } from '../../../lib/processing/index';
+import { isValidVideoId, isValidPartyId } from '../../../lib/http/validators';
+import { checkRateLimit, getClientIp } from '../../../lib/http/rateLimiter';
+import { partyPayload } from '../../../lib/party/payload';
+import { readJsonObject } from '../../../lib/http/requestBody';
+import { randomUUID } from 'node:crypto';
+import { validatedSettings, REMOTE_COMMANDS } from '../../../lib/party/settings';
 
 const MAX_QUEUE_SIZE = 20;
 
@@ -20,25 +20,11 @@ export async function GET(request) {
 
   const party = partyStore.get(id.toUpperCase());
   
-  // Attach current demucs job status to the queue items
-  const queueWithStatus = party.queue.map(song => ({
-    ...song,
-    jobStatus: jobQueue.get(song.jobId) || { status: 'pending' }
-  }));
-  
-  const currentSongWithStatus = party.currentSong ? {
-    ...party.currentSong,
-    jobStatus: jobQueue.get(party.currentSong.jobId) || { status: 'pending' }
-  } : null;
-
-  return NextResponse.json({ 
-    ...party, 
-    queue: queueWithStatus,
-    currentSong: currentSongWithStatus
-  });
+  return NextResponse.json(partyPayload(party));
 }
 
 export async function POST(request) {
+  let requestedPartyId;
   try {
     // Rate limit by IP
     const clientIp = getClientIp(request);
@@ -47,7 +33,7 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Too many requests. Please slow down.' }, { status: 429 });
     }
 
-    const body = await request.json();
+    const body = await readJsonObject(request);
     const { action, id, song } = body;
 
     if (!id || !isValidPartyId(id)) {
@@ -55,6 +41,7 @@ export async function POST(request) {
     }
 
     const partyId = id.toUpperCase();
+    requestedPartyId = partyId;
     let updatedParty;
 
     if (action === 'add') {
@@ -71,25 +58,19 @@ export async function POST(request) {
         return NextResponse.json({ error: `Queue is full (max ${MAX_QUEUE_SIZE} songs)` }, { status: 429 });
       }
 
-      // Run the background separation natively without an HTTP fetch loopback.
-      // Since we use --no-cpu-throttling in Cloud Run, the container stays alive.
-      const baseUrl = process.env.INTERNAL_BASE_URL || new URL(request.url).origin;
+      const cleanSong = {
+        videoId: song.videoId,
+        title: typeof song.title === 'string' ? song.title.slice(0, 300) : 'Unknown title',
+        artist: typeof song.artist === 'string' ? song.artist.slice(0, 200) : 'Unknown artist',
+        art: `https://i.ytimg.com/vi/${song.videoId}/hqdefault.jpg`,
+      };
+      await songProcessing.start(cleanSong);
       const jobId = song.videoId;
-      const uploadDir = path.join(process.cwd(), 'uploads', jobId);
-      fs.mkdirSync(uploadDir, { recursive: true });
-      jobQueue.set(jobId, { status: 'processing', progress: 0, message: 'Starting job...' });
-      
-      runBackgroundSeparation({ videoId: song.videoId, title: song.title, artist: song.artist }, jobId, uploadDir, baseUrl).catch(err => {
-        console.error("Background separation error:", err);
-        const existing = jobQueue.get(jobId);
-        if (existing?.status !== 'error') {
-          jobQueue.update(jobId, { status: 'error', error: 'Processing failed. Please try again.' });
-        }
-      });
 
       const newSong = {
-        ...song,
+        ...cleanSong,
         jobId,
+        queueId: randomUUID(),
         addedAt: Date.now()
       };
       
@@ -101,38 +82,42 @@ export async function POST(request) {
       }
       
     } else if (action === 'next') {
-      updatedParty = partyStore.nextSong(partyId);
+      updatedParty = partyStore.nextSong(partyId, body.expectedCurrentQueueId);
     } else if (action === 'previous') {
-      updatedParty = partyStore.previousSong(partyId);
+      updatedParty = partyStore.previousSong(partyId, body.expectedCurrentQueueId);
     } else if (action === 'remove') {
       const { index } = body;
-      if (typeof index !== 'number') return NextResponse.json({ error: 'Index required' }, { status: 400 });
-      updatedParty = partyStore.removeSong(partyId, index);
+      updatedParty = partyStore.removeSong(partyId, index, body.expectedQueueId);
     } else if (action === 'reorder') {
       const { oldIndex, newIndex } = body;
-      if (typeof oldIndex !== 'number' || typeof newIndex !== 'number') return NextResponse.json({ error: 'Indices required' }, { status: 400 });
-      updatedParty = partyStore.reorderSong(partyId, oldIndex, newIndex);
+      updatedParty = partyStore.reorderSong(partyId, oldIndex, newIndex, body.expectedQueueId, body.expectedTargetQueueId);
     } else if (action === 'playNow') {
       const { index } = body;
-      if (typeof index !== 'number') return NextResponse.json({ error: 'Index required' }, { status: 400 });
-      updatedParty = partyStore.playNow(partyId, index);
+      updatedParty = partyStore.playNow(partyId, index, body.expectedQueueId);
     } else if (action === 'updateSettings') {
       const { settings, sender } = body;
-      if (!settings || !sender) return NextResponse.json({ error: 'Settings and sender required' }, { status: 400 });
-      updatedParty = partyStore.updateSettings(partyId, settings, sender);
+      if (!['host', 'remote'].includes(sender)) return NextResponse.json({ error: 'A valid sender is required' }, { status: 400 });
+      let validated;
+      try { validated = validatedSettings(settings); } catch (error) {
+        return NextResponse.json({ error: error.message }, { status: 400 });
+      }
+      updatedParty = partyStore.updateSettings(partyId, validated, sender);
     } else if (action === 'remoteControl') {
       const { command } = body;
-      if (!command) return NextResponse.json({ error: 'Command required' }, { status: 400 });
+      if (!REMOTE_COMMANDS.has(command)) return NextResponse.json({ error: 'A valid command is required' }, { status: 400 });
       updatedParty = partyStore.setRemoteCommand(partyId, command);
     } else {
       return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
     }
 
-    return NextResponse.json(updatedParty);
+    return NextResponse.json(partyPayload(updatedParty));
 
   } catch (error) {
     // SECURITY: Don't leak internal error details to the client
     console.error('Party API Error:', error);
-    return NextResponse.json({ error: 'An internal error occurred' }, { status: 500 });
+    return NextResponse.json({
+      error: error.status >= 400 && error.status < 500 ? error.message : 'An internal error occurred',
+      ...(error.status === 409 && requestedPartyId ? { party: partyPayload(partyStore.get(requestedPartyId)) } : {}),
+    }, { status: error.status || 500 });
   }
 }

@@ -1,4 +1,4 @@
-FROM node:20-slim
+FROM node:22-bookworm-slim
 
 # Install system dependencies for Python, FFmpeg, yt-dlp, and Build tools
 RUN apt-get update && apt-get install -y \
@@ -6,6 +6,7 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     python3-venv \
     ffmpeg \
+    sox \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
@@ -14,22 +15,19 @@ ENV VIRTUAL_ENV=/opt/venv
 RUN python3 -m venv $VIRTUAL_ENV
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
-# 1. Install PyTorch (Default PyPI wheels include CUDA 12 support for Cloud Run GPUs!)
-RUN pip install --no-cache-dir \
-    torch==2.2.2 torchvision==0.17.2 torchaudio==2.2.2
-
-# 2. Install everything else (from default PyPI)
-# We must pin numpy < 2.0.0 because PyTorch 2.2.2 is not compatible with Numpy 2.x
-RUN pip install --no-cache-dir \
-    "numpy<2.0.0" \
-    demucs \
-    faster-whisper \
-    yt-dlp \
-    pydantic \
-    google-genai
+# Install the same pinned processing dependencies used in local development.
+COPY requirements-processing.txt /tmp/requirements-processing.txt
+RUN pip install --no-cache-dir -r /tmp/requirements-processing.txt yt-dlp==2026.8.19
 
 # Set the Python path for the Node app
 ENV PYTHON_BIN_PATH="/opt/venv/bin/python3"
+
+# Qwen requires modern Torch/Transformers; keep Demucs's pinned runtime intact.
+COPY requirements-asr.txt /tmp/requirements-asr.txt
+RUN python3 -m venv /opt/asr-venv && \
+    /opt/asr-venv/bin/pip install --no-cache-dir -r /tmp/requirements-asr.txt
+ENV ASR_PYTHON_BIN_PATH="/opt/asr-venv/bin/python3"
+ENV LYRICS_ASR_PROVIDER="qwen"
 
 # Set writable directories for PyTorch and HuggingFace models
 ENV TORCH_HOME=/app/models
@@ -52,7 +50,7 @@ RUN npm ci
 COPY . .
 
 # Build the Next.js application
-RUN npm run build
+RUN npm run build && npm prune --omit=dev --ignore-scripts
 
 # Create uploads and models directories with correct permissions
 RUN mkdir -p /app/uploads /app/models && chown -R nextjs:nodejs /app/uploads /app/models

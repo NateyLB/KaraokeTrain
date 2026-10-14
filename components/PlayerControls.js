@@ -1,4 +1,5 @@
 'use client';
+import { useShallow } from 'zustand/react/shallow';
 import { Play, Pause, Volume2, VolumeX, Video, SkipBack, SkipForward, Languages } from 'lucide-react';
 import useKaraokeStore from '../store/useKaraokeStore';
 
@@ -9,12 +10,26 @@ function formatTime(seconds) {
   return `${m}:${s < 10 ? '0' : ''}${s}`;
 }
 
-export default function PlayerControls({ onTogglePlay, onNextSong, onPreviousSong, onSeek }) {
+export default function PlayerControls({ onTogglePlay, onNextSong, onPreviousSong, onSeek, onAlignStart }) {
   const { 
     isPlaying, vocalsEnabled, setVocalsEnabled, isVideoVisible, setIsVideoVisible,
     lyricsOffset, setLyricsOffset, currentSongTime, duration, parsedLyrics, firstValidTime,
     selectedVersionIdx, setSelectedVersionIdx
-  } = useKaraokeStore();
+  } = useKaraokeStore(useShallow(state => ({
+    isPlaying: state.isPlaying,
+    vocalsEnabled: state.vocalsEnabled,
+    setVocalsEnabled: state.setVocalsEnabled,
+    isVideoVisible: state.isVideoVisible,
+    setIsVideoVisible: state.setIsVideoVisible,
+    lyricsOffset: state.lyricsOffset,
+    setLyricsOffset: state.setLyricsOffset,
+    currentSongTime: state.currentSongTime,
+    duration: state.duration,
+    parsedLyrics: state.parsedLyrics,
+    firstValidTime: state.firstValidTime,
+    selectedVersionIdx: state.selectedVersionIdx,
+    setSelectedVersionIdx: state.setSelectedVersionIdx
+  })));
 
   const isMultiVersion = parsedLyrics && parsedLyrics.length > 1 && parsedLyrics[0].lyrics;
 
@@ -72,11 +87,7 @@ export default function PlayerControls({ onTogglePlay, onNextSong, onPreviousSon
                     </div>
                     
                     <div style={{ display: 'flex', gap: '0.25rem' }}>
-                        <button onClick={() => {
-                            if (parsedLyrics.length > 0) {
-                                setLyricsOffset((currentSongTime - firstValidTime).toFixed(2));
-                            }
-                        }} className="btn-secondary mobile-icon-btn" style={{ padding: '0.5rem 1rem', borderRadius: '99px', fontSize: '1rem', fontWeight: 600 }} title="Click right when singing starts to align lyrics">
+                        <button onClick={onAlignStart} className="btn-secondary mobile-icon-btn" style={{ padding: '0.5rem 1rem', borderRadius: '99px', fontSize: '1rem', fontWeight: 600 }} title="Click right when singing starts to align lyrics">
                             <span className="hide-on-mobile">Align Start</span>
                             <span style={{ display: 'none' }} className="show-on-mobile-inline">Align</span>
                         </button>

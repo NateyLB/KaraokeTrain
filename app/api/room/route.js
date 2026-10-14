@@ -1,5 +1,5 @@
-import { fetchLyrics } from '../../../lib/lyrics';
-import { checkRateLimit, getClientIp } from '../../../lib/rateLimiter';
+import { fetchLyrics } from '../../../lib/lyrics/candidates';
+import { checkRateLimit, getClientIp } from '../../../lib/http/rateLimiter';
 
 // cleanMetadata removed - handled inside fetchLyrics
 

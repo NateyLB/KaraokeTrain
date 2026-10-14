@@ -1,232 +1,120 @@
 "use client";
 
-import { useEffect, useRef, useMemo, useState } from 'react';
+import { memo, useCallback, useLayoutEffect, useRef, useMemo } from 'react';
 import useKaraokeStore from '../store/useKaraokeStore';
+import { selectedLyrics, prepareLyricTimeline, lyricPlaybackState, wordProgress, wordSeparator } from '../lib/lyrics/timeline';
+
+const LyricLine = memo(function LyricLine({ line, index, featured, past, time, resting, finished, activeRef }) {
+  return (
+    <div ref={featured ? activeRef : null}
+      className={`lyric-line${featured ? ' lyric-line-featured lyric-line-active' : ''}`}
+      data-line-index={index} data-featured={featured || undefined}
+      data-singing={featured && !resting && time >= line.start && time < line.end || undefined}
+      style={{ opacity: featured ? (finished ? .5 : 1) : past ? .4 : .75 }}>
+      {line.words.length ? line.words.map((word, wordIndex) => {
+        const progress = wordProgress(word, time) * 100;
+        const highlighting = featured && !resting && !finished;
+        return <span key={wordIndex} className="lyric-word" data-progress={highlighting ? progress.toFixed(1) : undefined}
+          style={highlighting ? {
+            backgroundImage: 'linear-gradient(#fff,#fff), linear-gradient(var(--primary-accent),var(--primary-accent))',
+            backgroundRepeat: 'no-repeat', backgroundPosition: '0 0',
+            backgroundSize: `${progress}% 100%,100% 100%`, backgroundClip: 'text', WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent', color: 'transparent',
+          } : undefined}>
+          {word.word}{wordSeparator(word.word, line.words[wordIndex + 1]?.word)}
+        </span>;
+      }) : line.text}
+    </div>
+  );
+});
 
 export default function LyricsDisplay({ lyrics, currentTime }) {
   const containerRef = useRef(null);
+  const contentRef = useRef(null);
   const activeLineRef = useRef(null);
-  const [offsetY, setOffsetY] = useState(0);
-  
-  const isMultiVersion = lyrics && lyrics.length > 0 && lyrics[0].lyrics;
+  const previousFrameRef = useRef(null);
+  const positionRef = useRef(null);
   const selectedVersionIdx = useKaraokeStore(s => s.selectedVersionIdx);
-  const setSelectedVersionIdx = useKaraokeStore(s => s.setSelectedVersionIdx);
+  const timeline = useMemo(() => prepareLyricTimeline(selectedLyrics(lyrics, selectedVersionIdx)), [lyrics, selectedVersionIdx]);
+  const state = lyricPlaybackState(timeline, currentTime);
 
-  useEffect(() => {
-    if (isMultiVersion && selectedVersionIdx === 0) {
-        const romanizedIdx = lyrics.findIndex(v => v.label && v.label.includes('Romanized'));
-        if (romanizedIdx !== -1 && romanizedIdx !== selectedVersionIdx) {
-            setSelectedVersionIdx(romanizedIdx);
-        }
+  const positionLine = useCallback((duration = 400) => {
+    const container = containerRef.current;
+    const content = contentRef.current;
+    const line = activeLineRef.current;
+    if (!container || !content || !line) return;
+    const padding = parseFloat(getComputedStyle(container).paddingTop) || 0;
+    const target = container.clientHeight * .25 - padding - line.offsetTop - line.offsetHeight / 2;
+    if (positionRef.current != null && Math.abs(target - positionRef.current) < .5 &&
+      content.style.transform === `translateY(${target}px)`) return;
+    content.style.transitionDuration = `${duration}ms`;
+    content.style.transform = `translateY(${target}px)`;
+    positionRef.current = target;
+  }, []);
+
+  useLayoutEffect(() => {
+    const previous = previousFrameRef.current;
+    const changed = !previous || previous.index !== state.index || previous.timeline !== timeline;
+    if (changed) {
+      const discontinuity = !previous || previous.timeline !== timeline || Math.abs(currentTime - previous.time) > 1;
+      positionLine(discontinuity ? 0 : 400);
     }
-  }, [lyrics, isMultiVersion]);
+    previousFrameRef.current = { time: currentTime, index: state.index, timeline };
+  }, [currentTime, state.index, timeline, positionLine]);
 
-  const activeLyricsList = isMultiVersion ? (lyrics[selectedVersionIdx]?.lyrics || []) : lyrics;
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    const content = contentRef.current;
+    if (!container || !content) return;
+    let frame;
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => positionLine(0));
+    });
+    observer.observe(container);
+    observer.observe(content);
+    return () => { observer.disconnect(); cancelAnimationFrame(frame); };
+  }, [timeline, positionLine]);
 
-  const activeIndex = useMemo(() => {
-    if (!activeLyricsList || activeLyricsList.length === 0) return -1;
-    
-    // Bulletproof search: find the line with the maximum time that is <= currentTime
-    let bestIdx = -1;
-    let maxTime = -1;
-    for (let i = 0; i < activeLyricsList.length; i++) {
-      let lineStartTime = activeLyricsList[i].time;
-      const activeWords = activeLyricsList[i].words || [];
-      
-      // Activate the line slightly before the first word (0.3s) so it doesn't pop in already-highlighting
-      if (currentTime >= (lineStartTime - 0.3) && lineStartTime >= maxTime) {
-        maxTime = lineStartTime;
-        bestIdx = i;
+  if (!timeline.length) return <div className="glass-panel" style={{ padding: '2rem', textAlign: 'center' }}>
+    <p className="body-text">No synced lyrics available.</p>
+  </div>;
+
+  return <>
+    <style>{`
+      .lyric-box { height:100%; max-height:100%; }
+      .lyric-line {
+        margin:1.4rem 0; font-size:clamp(1.75rem,5vw,2.2rem); line-height:1.5;
+        text-align:center; font-weight:500; color:var(--text-main);
+        transform:scale(.82); transform-origin:center;
+        transition:opacity .18s ease,transform .25s ease;
       }
-    }
-    return bestIdx;
-  }, [currentTime, activeLyricsList]);
-
-  // Use CSS hardware-accelerated transforms for perfectly smooth, interruptible scrolling
-  useEffect(() => {
-    if (activeLineRef.current && containerRef.current) {
-      const container = containerRef.current;
-      const element = activeLineRef.current;
-      
-      // Anchor the active lyric at 25% from the top of the container
-      // This leaves room for 1 past line, and massive room for future lines!
-      const targetScroll = element.offsetTop - (container.clientHeight * 0.25) + (element.clientHeight / 2);
-      setOffsetY(-targetScroll);
-    }
-  }, [activeIndex]);
-
-  if (!lyrics || lyrics.length === 0) {
-    return (
-      <div className="glass-panel" style={{ padding: '2rem', textAlign: 'center' }}>
-        <p className="body-text">No synced lyrics available.</p>
+      .lyric-line-featured { transform:scale(1.05); text-shadow:0 0 20px rgba(139,92,246,.4); }
+      .lyric-word { display:inline; transition:background-size .04s linear; }
+      .lyric-status { position:absolute; top:0; left:0; right:0; text-align:center; font-size:.85rem; color:var(--text-muted); z-index:1; }
+      @media (orientation:landscape) and (max-height:500px) {
+        .lyric-line { font-size:1.25rem; margin:.7rem 0; }
+      }
+      @media (prefers-reduced-motion:reduce) {
+        .lyric-content,.lyric-line,.lyric-word { transition:none !important; }
+        .lyric-line { transform:none; }
+      }
+    `}</style>
+    <div className="lyric-box" style={{ position:'relative',boxSizing:'border-box' }}>
+      {state.rest && state.countdown > 0 && <div className="lyric-status" aria-live="off">
+        {currentTime < timeline[0].start ? 'Vocals' : 'Instrumental · Vocals'} in {state.countdown}s
+      </div>}
+      <div ref={containerRef} style={{ height:'100%',boxSizing:'border-box',overflow:'hidden',position:'relative',
+        maskImage:'linear-gradient(to bottom,transparent 0%,black 15%,black 70%,transparent 100%)',
+        WebkitMaskImage:'linear-gradient(to bottom,transparent 0%,black 15%,black 70%,transparent 100%)',
+        padding:'clamp(1rem,5vh,3rem) 1.2rem' }}>
+        <div ref={contentRef} className="lyric-content" style={{ position:'relative',display:'flow-root',width:'100%',
+          transform:'translateY(0)',transition:'transform 400ms cubic-bezier(.25,1,.5,1)' }}>
+          {timeline.map((line,index) => <LyricLine key={index} line={line} index={index}
+            featured={index===state.index} past={index<state.index} time={index===state.index ? currentTime : 0}
+            resting={index===state.index && state.rest} finished={index===state.index && Boolean(state.finished)} activeRef={activeLineRef} />)}
+        </div>
       </div>
-    );
-  }
-
-  return (
-    <>
-      <style>{`
-        .lyric-box {
-          height: 100%;
-          max-height: 100%;
-        }
-        @media (orientation: landscape) and (min-width: 1024px) {
-          .lyric-box {
-            max-height: 750px;
-            width: 100%;
-          }
-        }
-
-        .lyric-line {
-          margin: 1.5rem 0;
-          transition: all 0.3s ease;
-          font-size: 1.25rem;
-          text-align: center;
-          font-weight: 500;
-        }
-        .lyric-line-active {
-          font-size: 2.2rem;
-          transform: scale(1.05);
-          text-shadow: 0 0 20px rgba(139, 92, 246, 0.4);
-        }
-        
-        /* Landscape on phones (height is small) */
-        @media (orientation: landscape) and (max-height: 500px) {
-           .lyric-line {
-             font-size: 1rem !important;
-             margin: 1rem 0 !important;
-           }
-           .lyric-line-active {
-             font-size: 1.5rem !important;
-           }
-        }
-        
-        /* Landscape on tablets/small laptops */
-        @media (orientation: landscape) and (max-width: 1024px) and (min-height: 501px) {
-           .lyric-line {
-             font-size: 1.1rem !important;
-           }
-           .lyric-line-active {
-             font-size: 1.75rem !important;
-           }
-        }
-      `}</style>
-      <div 
-        ref={containerRef}
-        className="lyric-box"
-        style={{
-          boxSizing: 'border-box',
-          overflow: 'hidden', // Disable native scroll, we use CSS transforms
-          position: 'relative',
-          maskImage: 'linear-gradient(to bottom, transparent 0%, black 15%, black 70%, transparent 100%)',
-          WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 15%, black 70%, transparent 100%)',
-          padding: 'clamp(1rem, 5vh, 3rem) 1rem'
-        }}
-      >
-      <div style={{
-        transform: `translateY(${offsetY}px)`,
-        transition: 'transform 0.5s cubic-bezier(0.25, 1, 0.5, 1)',
-        width: '100%'
-      }}>
-        {activeLyricsList.map((line, index) => {
-        const isActive = index === activeIndex;
-        const isPast = index < activeIndex;
-        // In case we still need nextTime for interpolation logic
-        const nextTime = index < activeLyricsList.length - 1 ? activeLyricsList[index + 1].time : Infinity;
-
-        let styleClass = 'body-text lyric-line';
-        let customStyle = {};
-
-        if (isActive) {
-          styleClass = 'heading-2 lyric-line lyric-line-active'; 
-          customStyle = {};
-          
-          let trueStartTime = line.time;
-          let trueEndTime = nextTime !== Infinity ? nextTime : line.time + 5;
-          let activeWords = line.words || [];
-          
-          if (activeWords.length > 0 && activeWords[0].start != null && activeWords[activeWords.length - 1].end != null) {
-              // The backend Python script has already validated and cleaned the word timestamps.
-              // We fully trust them, even if they drastically differ from the studio line.time (e.g. for Live versions).
-              trueStartTime = activeWords[0].start;
-              trueEndTime = activeWords[activeWords.length - 1].end;
-          }
-          
-          const duration = trueEndTime - trueStartTime;
-          
-          return (
-            <div 
-              key={index} 
-              ref={isActive ? activeLineRef : null}
-              className={styleClass}
-              style={customStyle}
-            >
-              {activeWords.length > 0 ? activeWords.map((wObj, wIdx) => {
-                let wordProgress = 0;
-                if (wObj.start != null && wObj.end != null) {
-                  const wDuration = wObj.end - wObj.start;
-                  if (currentTime >= wObj.start && wDuration > 0) {
-                      wordProgress = (currentTime - wObj.start) / wDuration;
-                  }
-                  if (currentTime > wObj.end) wordProgress = 1;
-                } else {
-                  // Fallback if timestamps are missing
-                  wordProgress = currentTime >= trueStartTime ? 1 : 0;
-                }
-                
-                wordProgress = Math.max(0, Math.min(1, wordProgress)) * 100;
-                const isSinging = wordProgress > 0 && wordProgress < 100;
-                
-                // Add a space after the word if it doesn't have one and isn't the last word
-                // Whisper sometimes includes trailing spaces, LRCLIB split does not.
-                const needsSpace = !wObj.word.endsWith(' ') && wIdx < activeWords.length - 1;
-                
-                return (
-                  <span 
-                    key={wIdx} 
-                    style={{
-                      backgroundImage: `linear-gradient(to right, #ffffff, #ffffff), linear-gradient(to right, var(--primary-accent), var(--primary-accent))`,
-                      backgroundRepeat: 'no-repeat, no-repeat',
-                      backgroundPosition: '0 0, 0 0',
-                      backgroundSize: `${wordProgress}% 100%, 100% 100%`,
-                      WebkitBackgroundClip: 'text, text',
-                      backgroundClip: 'text, text',
-                      WebkitTextFillColor: 'transparent',
-                      color: 'transparent',
-                      transition: isSinging ? 'background-size 0.05s linear' : 'none',
-                      display: 'inline'
-                    }}
-                  >
-                    {wObj.word}{needsSpace ? ' ' : ''}
-                  </span>
-                );
-              }) : (
-                <span style={{ color: 'var(--primary-accent)' }}>
-                  {line.text}
-                </span>
-              )}
-            </div>
-          );
-        } else if (isPast) {
-          customStyle.color = 'var(--text-muted)';
-          customStyle.opacity = 0.5;
-        } else {
-          customStyle.color = 'var(--text-main)';
-          customStyle.opacity = 0.8;
-        }
-
-        return (
-          <div 
-            key={index} 
-            className={styleClass}
-            style={customStyle}
-          >
-            {line.text}
-          </div>
-        );
-      })}
-      </div>
-      </div>
-    </>
-  );
+    </div>
+  </>;
 }

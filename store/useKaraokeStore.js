@@ -1,11 +1,11 @@
 'use client';
 import { create } from 'zustand';
 
-const useKaraokeStore = create((set, get) => ({
+const useKaraokeStore = create((set) => ({
   // === Party/Queue (from server polling) ===
   partyState: null,
   currentJobId: null,
-  setPartyState: (v) => set({ partyState: v }),
+  setPartyState: (v) => set(state => v?.id === state.partyState?.id && v?.updatedAt < state.partyState?.updatedAt ? state : { partyState: v }),
   setCurrentJobId: (v) => set({ currentJobId: v }),
 
   // === Synced Settings (bi-directional Host <-> Remote via server) ===
@@ -34,24 +34,6 @@ const useKaraokeStore = create((set, get) => ({
   setEchoCancellationOn: (v) => set({ echoCancellationOn: v }),
   setIsVideoVisible: (v) => set({ isVideoVisible: v }),
   setSelectedVersionIdx: (v) => set({ selectedVersionIdx: v }),
-
-  // Helper to get all synced settings as an object
-  getSyncedSettings: () => {
-    const s = get();
-    return {
-      isPlaying: s.isPlaying,
-      lyricsOffset: s.lyricsOffset,
-      firstValidTime: s.firstValidTime,
-      vocalsEnabled: s.vocalsEnabled,
-      vocalsVolume: s.vocalsVolume,
-      micEnabled: s.micEnabled,
-      micVolume: s.micVolume,
-      autoTuneOn: s.autoTuneOn,
-      echoCancellationOn: s.echoCancellationOn,
-      isVideoVisible: s.isVideoVisible,
-      selectedVersionIdx: s.selectedVersionIdx,
-    };
-  },
 
   // === Playback (Room-only) ===
   currentSongTime: 0,
@@ -97,6 +79,7 @@ const useKaraokeStore = create((set, get) => ({
   // === Batch reset for new song ===
   resetForNewSong: () => set({
     isPlaying: false,
+    selectedVersionIdx: 0,
     currentSongTime: 0,
     duration: 0,
     stems: null,

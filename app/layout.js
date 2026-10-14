@@ -1,5 +1,6 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import Toast from "../components/Toast";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -19,7 +20,6 @@ export const metadata = {
 export const viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
   themeColor: "#05001a",
 };
 
@@ -30,6 +30,7 @@ export default function RootLayout({ children }) {
         <main className="container">
           {children}
         </main>
+        <Toast />
       </body>
     </html>
   );

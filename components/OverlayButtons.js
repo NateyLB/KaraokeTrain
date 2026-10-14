@@ -1,4 +1,5 @@
 'use client';
+import { useShallow } from 'zustand/react/shallow';
 import { Search, Music, HelpCircle, Mic, MicOff, Circle, Play } from 'lucide-react';
 import useKaraokeStore from '../store/useKaraokeStore';
 import SongQueue from './SongQueue';
@@ -9,7 +10,23 @@ import InfoModal from './InfoModal';
  * plus the SongQueue drawer itself.
  */
 export default function OverlayButtons({ roomId, showSearchButton = true, context = 'room' }) {
-  const { partyState, isSearchOpen, setIsSearchOpen, isQueueOpen, setIsQueueOpen, isInfoOpen, setIsInfoOpen, isMicExpanded, setIsMicExpanded, micEnabled, isRecordingExpanded, setIsRecordingExpanded, isRecording, isControlsVisible, setIsControlsVisible } = useKaraokeStore();
+  const { partyState, isSearchOpen, setIsSearchOpen, isQueueOpen, setIsQueueOpen, isInfoOpen, setIsInfoOpen, isMicExpanded, setIsMicExpanded, micEnabled, isRecordingExpanded, setIsRecordingExpanded, isRecording, isControlsVisible, setIsControlsVisible } = useKaraokeStore(useShallow(state => ({
+    partyState: state.partyState,
+    isSearchOpen: state.isSearchOpen,
+    setIsSearchOpen: state.setIsSearchOpen,
+    isQueueOpen: state.isQueueOpen,
+    setIsQueueOpen: state.setIsQueueOpen,
+    isInfoOpen: state.isInfoOpen,
+    setIsInfoOpen: state.setIsInfoOpen,
+    isMicExpanded: state.isMicExpanded,
+    setIsMicExpanded: state.setIsMicExpanded,
+    micEnabled: state.micEnabled,
+    isRecordingExpanded: state.isRecordingExpanded,
+    setIsRecordingExpanded: state.setIsRecordingExpanded,
+    isRecording: state.isRecording,
+    isControlsVisible: state.isControlsVisible,
+    setIsControlsVisible: state.setIsControlsVisible
+  })));
 
   const currentProcessingSong = partyState?.currentSong && ['pending', 'processing', 'error'].includes(partyState.currentSong.jobStatus?.status);
   const displayQueueLength = (partyState?.queue?.length || 0) + (currentProcessingSong ? 1 : 0);

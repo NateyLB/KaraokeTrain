@@ -1,10 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
+import { useEffect, useRef } from 'react';
 import useKaraokeStore from '../store/useKaraokeStore';
 import { useRecording } from '../hooks/useRecording';
+import RecordingTimer from './RecordingTimer';
 import { Video, VideoOff, Circle, Square } from 'lucide-react';
 
 export default function RecordingPanel() {
-  const { isRecordingExpanded } = useKaraokeStore();
+  const { isRecordingExpanded } = useKaraokeStore(useShallow(state => ({
+    isRecordingExpanded: state.isRecordingExpanded
+  })));
   const { 
     isRecording, 
     isRecordingVideo, 
@@ -15,7 +19,6 @@ export default function RecordingPanel() {
   } = useRecording();
 
   const videoRef = useRef(null);
-  const [duration, setDuration] = useState(0);
 
   // Sync video stream to the preview video element
   useEffect(() => {
@@ -23,25 +26,6 @@ export default function RecordingPanel() {
       videoRef.current.srcObject = videoStream;
     }
   }, [videoStream]);
-
-  // Timer
-  useEffect(() => {
-    let interval;
-    if (isRecording) {
-      interval = setInterval(() => {
-        setDuration(prev => prev + 1);
-      }, 1000);
-    } else {
-      setDuration(0);
-    }
-    return () => clearInterval(interval);
-  }, [isRecording]);
-
-  const formatTime = (seconds) => {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m}:${s.toString().padStart(2, '0')}`;
-  };
 
   return (
     <div 
@@ -72,9 +56,7 @@ export default function RecordingPanel() {
           Recording
         </h3>
         {isRecording && (
-          <span style={{ color: '#ef4444', fontSize: '0.9rem', fontWeight: 'bold', fontFamily: 'monospace' }}>
-            {formatTime(duration)}
-          </span>
+          <RecordingTimer />
         )}
       </div>
 

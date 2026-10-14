@@ -1,10 +1,14 @@
 'use client';
+import { useShallow } from 'zustand/react/shallow';
 import { useEffect } from 'react';
 import YouTube from 'react-youtube';
 import useKaraokeStore from '../store/useKaraokeStore';
 
 export default function VideoPlayer({ videoId, ytPlayerRef, onStateChange }) {
-  const { isPlaying, isVideoVisible } = useKaraokeStore();
+  const { isPlaying, isVideoVisible } = useKaraokeStore(useShallow(state => ({
+    isPlaying: state.isPlaying,
+    isVideoVisible: state.isVideoVisible
+  })));
 
   useEffect(() => {
     // Clear the player reference immediately when the video changes

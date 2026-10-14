@@ -1,0 +1,4 @@
+# Keep Qwen's modern PyTorch/Transformers runtime separate from Demucs.
+qwen-asr==0.0.6
+torch==2.14.1
+soundfile==0.13.1

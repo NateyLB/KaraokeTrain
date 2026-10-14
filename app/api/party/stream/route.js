@@ -1,76 +1,56 @@
 export const dynamic = 'force-dynamic';
 
-import { NextResponse } from 'next/server';
-import { partyStore } from '../../../../lib/partyStore';
-import { jobQueue } from '../../../../lib/jobQueue';
-import { isValidPartyId } from '../../../../lib/validators';
+import { partyStore } from '../../../../lib/party/partyStore';
+import { jobQueue } from '../../../../lib/processing/jobQueue';
+import { partyPayload } from '../../../../lib/party/payload';
+import { isValidPartyId } from '../../../../lib/http/validators';
 
 export async function GET(request) {
-  const { searchParams } = new URL(request.url);
-  const id = searchParams.get('id');
-
+  const id = new URL(request.url).searchParams.get('id');
   if (!id || !isValidPartyId(id)) {
-    return NextResponse.json({ error: 'A valid Party ID is required' }, { status: 400 });
+    return Response.json({ error: 'A valid Party ID is required' }, { status: 400 });
   }
 
   const partyId = id.toUpperCase();
-
+  let cleanup = () => {};
   const stream = new ReadableStream({
     start(controller) {
       const encoder = new TextEncoder();
-      
-      // Helper to serialize and push data
-      const sendParty = (party) => {
-        const queueWithStatus = party.queue.map(song => ({
-          ...song,
-          jobStatus: jobQueue.get(song.jobId) || { status: 'pending' }
-        }));
-        
-        const currentSongWithStatus = party.currentSong ? {
-          ...party.currentSong,
-          jobStatus: jobQueue.get(party.currentSong.jobId) || { status: 'pending' }
-        } : null;
-
-        const payload = {
-          ...party,
-          queue: queueWithStatus,
-          currentSong: currentSongWithStatus
-        };
-
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
-      };
-
-      // 1. Immediately send the current state upon connection
-      sendParty(partyStore.get(partyId));
-
-      // 2. Listen for future updates
       const eventName = `update:${partyId}`;
-      const onUpdate = (updatedParty) => {
-        sendParty(updatedParty);
+      let closed = false;
+      let pingInterval;
+      let unsubscribeJobs = () => {};
+
+      const send = text => {
+        if (closed) return;
+        try { controller.enqueue(encoder.encode(text)); }
+        catch { cleanup(); }
+      };
+      const sendParty = party => send(`data: ${JSON.stringify(partyPayload(party))}\n\n`);
+      const onUpdate = party => sendParty(party);
+      cleanup = () => {
+        if (closed) return;
+        closed = true;
+        clearInterval(pingInterval);
+        unsubscribeJobs();
+        global.partyEvents?.off(eventName, onUpdate);
+        request.signal.removeEventListener('abort', cleanup);
+        try { controller.close(); } catch { /* already cancelled */ }
       };
 
-      if (global.partyEvents) {
-        global.partyEvents.on(eventName, onUpdate);
-      }
-
-      // Ping to keep connection alive
-      const pingInterval = setInterval(() => {
-        try {
-          controller.enqueue(encoder.encode(`: ping\n\n`));
-        } catch (e) {
-          clearInterval(pingInterval);
+      if (request.signal.aborted) { cleanup(); return; }
+      request.signal.addEventListener('abort', cleanup, { once: true });
+      global.partyEvents?.on(eventName, onUpdate);
+      unsubscribeJobs = jobQueue.subscribe(jobId => {
+        const party = partyStore.get(partyId);
+        if (party.currentSong?.jobId === jobId || party.queue.some(song => song.jobId === jobId)) {
+          sendParty(party);
         }
-      }, 30000);
-
-      // Cleanup on client disconnect
-      request.signal.addEventListener('abort', () => {
-        clearInterval(pingInterval);
-        if (global.partyEvents) {
-          global.partyEvents.off(eventName, onUpdate);
-        }
-        try { controller.close(); } catch (e) {}
       });
-    }
+      sendParty(partyStore.get(partyId));
+      if (!closed) pingInterval = setInterval(() => send(': ping\n\n'), 30000);
+    },
+    cancel() { cleanup(); },
   });
 
   return new Response(stream, {

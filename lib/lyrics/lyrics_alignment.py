@@ -1,0 +1,174 @@
+"""Pure validation/alignment; studio timestamps never authorize display timing."""
+import difflib
+import math
+import unicodedata
+
+ENGINE_VERSION = 3
+
+
+def units(text):
+    normalized = ''.join(char for char in unicodedata.normalize('NFKC', text).lower() if char.isalnum())
+    if any('\u3040' <= char <= '\u9fff' or '\uac00' <= char <= '\ud7a3' for char in normalized):
+        return list(normalized)
+    return [normalized] if normalized else []
+
+
+def flatten(lines, transcript=False):
+    tokens, owners, words = [], [], []
+    for line_idx, line in enumerate(lines):
+        source = line.get('words', []) if transcript else [{'word': word} for word in line['text'].split()]
+        for word in source:
+            pieces = units(word['word'])
+            if not pieces:
+                continue
+            word_idx = len(words)
+            words.append({**word, 'line_idx': line_idx})
+            tokens.extend(pieces)
+            owners.extend([word_idx] * len(pieces))
+    return tokens, owners, words
+
+
+def fallback(transcript):
+    duration = transcript.get('duration', float('inf'))
+    lines = []
+    for segment in transcript.get('segments', []):
+        words = []
+        for word in segment.get('words', []):
+            start, end = word.get('start', -1), word.get('end', -1)
+            if not (math.isfinite(start) and math.isfinite(end) and 0 <= start < end <= duration):
+                continue
+            words.append(dict(word))
+        if words:
+            lines.append({'time': words[0]['start'], 'text': segment['text'], 'words': words})
+    return sorted(lines, key=lambda line: line['time'])
+
+
+def evaluate(candidate, transcript_lines):
+    lines = [line for line in candidate.get('lines', []) if line.get('text', '').strip()]
+    reference, ref_owners, ref_words = flatten(lines)
+    actual, actual_owners, actual_words = flatten(transcript_lines, transcript=True)
+    matcher = difflib.SequenceMatcher(None, reference, actual, autojunk=False)
+    anchors = {}
+    matched_tokens = []
+    for block in matcher.get_matching_blocks():
+        for offset in range(block.size):
+            ref_idx, actual_idx = block.a + offset, block.b + offset
+            anchors.setdefault(ref_owners[ref_idx], []).append(actual_words[actual_owners[actual_idx]])
+            matched_tokens.append(reference[ref_idx])
+    matched = len(matched_tokens)
+    reference_coverage = matched / max(1, len(reference))
+    transcript_coverage = matched / max(1, len(actual))
+    ratio = matcher.ratio()
+    accepted = (candidate.get('exactMatch') is True and matched >= 8 and len(set(matched_tokens)) >= 4 and
+                reference_coverage >= .40 and transcript_coverage >= .50 and ratio >= .52)
+    diagnostics = {'id': candidate.get('id'), 'trackName': candidate.get('trackName'),
+                   'artistName': candidate.get('artistName'), 'accepted': accepted,
+                   'matchedTokens': matched, 'referenceCoverage': round(reference_coverage, 3),
+                   'transcriptCoverage': round(transcript_coverage, 3), 'score': round(ratio, 3)}
+    return diagnostics, lines, ref_words, anchors
+
+
+def aligned_lines(lines, words, anchors):
+    output = []
+    for line_idx, line in enumerate(lines):
+        indices = [idx for idx, word in enumerate(words) if word['line_idx'] == line_idx]
+        matches = [idx for idx in indices if idx in anchors]
+        if len(matches) / max(1, len(indices)) < .60 or len(matches) < min(2, len(indices)):
+            continue
+        timed = {}
+        for idx in matches:
+            evidence = anchors[idx]
+            timed[idx] = {'word': words[idx]['word'], 'start': min(w['start'] for w in evidence),
+                          'end': max(w['end'] for w in evidence)}
+        # Interpolate at most two omissions bounded by real matches in this line.
+        for left, right in zip(matches, matches[1:]):
+            count = right - left - 1
+            gap = timed[right]['start'] - timed[left]['end']
+            if 0 < count <= 2 and .02 * count <= gap <= 3:
+                for offset in range(count):
+                    idx = left + offset + 1
+                    timed[idx] = {'word': words[idx]['word'],
+                                  'start': timed[left]['end'] + gap * offset / count,
+                                  'end': timed[left]['end'] + gap * (offset + 1) / count}
+        # Unsupported edges/verses remain transcription rather than fabricated lyrics.
+        if any(idx not in timed for idx in indices):
+            continue
+        line_words = [timed[idx] for idx in indices]
+        if any(line_words[idx]['start'] - line_words[idx - 1]['end'] > 8
+               for idx in range(1, len(line_words))):
+            continue  # Do not stretch a partial chorus across an instrumental break.
+        for idx in range(1, len(line_words)):
+            previous, current = line_words[idx - 1], line_words[idx]
+            if previous['end'] > current['start']:
+                boundary = (previous['start'] + current['end']) / 2
+                previous['end'] = boundary
+                current['start'] = boundary
+        if any(word['end'] <= word['start'] for word in line_words):
+            continue
+        output.append({'time': line_words[0]['start'], 'text': line['text'],
+                       'words': line_words, 'referenceLine': line_idx})
+    return output
+
+
+def merge_transcription(aligned, actual):
+    intervals = [(line['words'][0]['start'], line['words'][-1]['end']) for line in aligned]
+    remainder = []
+    for line in actual:
+        kept = []
+        for word in line['words']:
+            midpoint = (word['start'] + word['end']) / 2
+            if not any(start <= midpoint <= end for start, end in intervals):
+                kept.append(dict(word))
+            elif kept:
+                remainder.append({'time': kept[0]['start'], 'text': ' '.join(w['word'] for w in kept), 'words': kept})
+                kept = []
+        if kept:
+            remainder.append({'time': kept[0]['start'], 'text': ' '.join(w['word'] for w in kept), 'words': kept})
+    cleaned = [{key: value for key, value in line.items() if key != 'referenceLine'} for line in aligned]
+    return sorted(cleaned + remainder, key=lambda line: line['time'])
+
+
+def align_lyrics(candidates, transcript):
+    is_qwen = transcript.get('provider') == 'qwen'
+    fallback_source = 'qwen_transcription' if is_qwen else 'whisper_fallback'
+    aligned_source = 'lrclib_qwen_aligned' if is_qwen else 'lrclib_aligned'
+    actual = fallback(transcript)
+    evaluations = [(candidate, evaluate(candidate, actual)) for candidate in candidates
+                   if candidate.get('derivedFrom') is None]
+    diagnostics = [result[0] for _, result in evaluations]
+    accepted = [(candidate, result) for candidate, result in evaluations if result[0]['accepted']]
+    base = {'lyricsEngineVersion': ENGINE_VERSION, 'validation': {'candidates': diagnostics,
+            'independentTranscription': True, 'reason': 'no_exact_match' if not candidates else 'transcription_mismatch'}}
+    if not accepted:
+        return {**base, 'source': fallback_source, 'lyrics': actual}
+    candidate, result = max(accepted, key=lambda entry: entry[1][0]['score'])
+    aligned = aligned_lines(result[1], result[2], result[3])
+    if not aligned:
+        base['validation']['reason'] = 'insufficient_timing_evidence'
+        return {**base, 'source': fallback_source, 'lyrics': actual}
+    base['validation'].update({'reason': 'validated', 'selected': result[0],
+                               'alignedLines': len(aligned), 'referenceLines': len(result[1])})
+    lyrics = merge_transcription(aligned, actual)
+    versions = [{'label': candidate.get('label', 'Original'), 'isKorean': candidate.get('isKorean', False), 'lyrics': lyrics}]
+    # Phonetic text inherits times from its validated parent, never another song.
+    for derived in candidates:
+        if derived.get('derivedFrom') != candidate.get('id'):
+            continue
+        derived_lines = derived.get('lines', [])
+        converted = []
+        for line in aligned:
+            idx = line['referenceLine']
+            if idx >= len(derived_lines):
+                break
+            text = derived_lines[idx]['text']
+            tokens = text.split()
+            start, end = line['words'][0]['start'], line['words'][-1]['end']
+            converted.append({'time': start, 'text': text, 'words': [
+                {'word': token, 'start': start + (end-start)*i/max(1,len(tokens)),
+                 'end': start + (end-start)*(i+1)/max(1,len(tokens))} for i, token in enumerate(tokens)]})
+        if len(converted) == len(aligned):
+            canonical = [{k: v for k, v in line.items() if k != 'referenceLine'} for line in aligned]
+            converted = sorted(converted + [line for line in lyrics if line not in canonical], key=lambda line: line['time'])
+            versions.append({'label': derived.get('label', 'Romanized'), 'isKorean': False, 'lyrics': converted})
+    return {**base, 'source': aligned_source + ('_multi' if len(versions) > 1 else ''),
+            'lyrics': versions if len(versions) > 1 else lyrics}
