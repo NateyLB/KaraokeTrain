@@ -71,21 +71,26 @@ export async function POST(request) {
         return NextResponse.json({ error: `Queue is full (max ${MAX_QUEUE_SIZE} songs)` }, { status: 429 });
       }
 
-      // Run the background separation natively without an HTTP fetch loopback.
-      // Since we use --no-cpu-throttling in Cloud Run, the container stays alive.
-      const baseUrl = process.env.INTERNAL_BASE_URL || new URL(request.url).origin;
       const jobId = song.videoId;
-      const uploadDir = path.join(process.cwd(), 'uploads', jobId);
-      fs.mkdirSync(uploadDir, { recursive: true });
-      jobQueue.set(jobId, { status: 'processing', progress: 0, message: 'Starting job...' });
       
-      runBackgroundSeparation({ videoId: song.videoId, title: song.title, artist: song.artist }, jobId, uploadDir, baseUrl).catch(err => {
-        console.error("Background separation error:", err);
-        const existing = jobQueue.get(jobId);
-        if (existing?.status !== 'error') {
-          jobQueue.update(jobId, { status: 'error', error: 'Processing failed. Please try again.' });
-        }
-      });
+      if (currentParty.isNativeHost) {
+          // If iOS is the host, skip backend separation completely.
+          jobQueue.set(jobId, { status: 'pending', progress: 0, message: 'Waiting for Host...' });
+      } else {
+          // Run the background separation natively
+          const baseUrl = process.env.INTERNAL_BASE_URL || new URL(request.url).origin;
+          const uploadDir = path.join(process.cwd(), 'uploads', jobId);
+          fs.mkdirSync(uploadDir, { recursive: true });
+          jobQueue.set(jobId, { status: 'processing', progress: 0, message: 'Starting job...' });
+
+          runBackgroundSeparation({ videoId: song.videoId, title: song.title, artist: song.artist }, jobId, uploadDir, baseUrl).catch(err => {
+            console.error("Background separation error:", err);
+            const existing = jobQueue.get(jobId);
+            if (existing?.status !== 'error') {
+              jobQueue.update(jobId, { status: 'error', error: 'Processing failed. Please try again.' });
+            }
+          });
+      }
 
       const newSong = {
         ...song,
@@ -124,6 +129,9 @@ export async function POST(request) {
       const { command } = body;
       if (!command) return NextResponse.json({ error: 'Command required' }, { status: 400 });
       updatedParty = partyStore.setRemoteCommand(partyId, command);
+    } else if (action === 'setNativeHost') {
+      const { isNative } = body;
+      updatedParty = partyStore.setNativeHost(partyId, !!isNative);
     } else {
       return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
     }

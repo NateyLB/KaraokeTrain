@@ -1,0 +1,16 @@
+# Tested combinations (any of these should work):
+#
+#   Verified set A (used to produce the released mlpackage):
+#     torch 2.8.0, torchaudio 2.8.0, coremltools 9.0,
+#     demucs 4.0.1, numpy 2.0.2, einops 0.8.2, Python 3.9
+#
+# Lower bounds reflect the API surface the converter relies on; upper
+# bounds are kept open since coremltools 9.x and torch 2.8.x are known
+# to convert this model cleanly.
+
+torch>=2.1
+torchaudio>=2.1
+demucs>=4.0,<5.0
+coremltools>=7.2
+numpy>=1.24
+einops>=0.7

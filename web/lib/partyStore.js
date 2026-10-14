@@ -48,8 +48,9 @@ export const partyStore = {
         }
       }
 
-      global.karaokeParties.set(partyId, {
+        global.karaokeParties.set(partyId, {
         id: partyId,
+        isNativeHost: false, // Flag to indicate if iOS/native is hosting
         currentSong: null,
         queue: [],
         history: [],
@@ -72,6 +73,14 @@ export const partyStore = {
     return global.karaokeParties.get(partyId);
   },
   
+  setNativeHost(partyId, isNative) {
+    const party = this.get(partyId);
+    party.isNativeHost = isNative;
+    party.updatedAt = Date.now();
+    global.partyEvents.emit(`update:${partyId}`, party);
+    return party;
+  },
+
   update(partyId, partialData) {
     const existing = this.get(partyId);
     const updated = { ...existing, ...partialData, updatedAt: Date.now() };

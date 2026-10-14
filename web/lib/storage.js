@@ -95,6 +95,7 @@ export async function uploadJson(jsonObject, destinationKey) {
     console.log(`Uploaded JSON to gs://${bucketName}/${destinationKey}`);
   } catch (e) {
     console.error("Failed to upload JSON to GCS:", e);
+    throw e;
   }
 }
 
@@ -118,7 +119,7 @@ export async function getFileStream(videoId, stem) {
     
     const [metadata] = await file.getMetadata();
     return {
-      stream: file.createReadStream(),
+      openStream: (range = {}) => file.createReadStream(range),
       size: parseInt(metadata.size, 10),
       source: 'gcs',
       gcsFile: file
@@ -127,7 +128,7 @@ export async function getFileStream(videoId, stem) {
     // Local mode (if the user actually overrides to local storage)
     if (!fs.existsSync(localStemPath)) return null;
     return {
-      stream: fs.createReadStream(localStemPath),
+      openStream: (range = {}) => fs.createReadStream(localStemPath, range),
       size: fs.statSync(localStemPath).size,
       source: 'local'
     };
@@ -162,7 +163,8 @@ export async function getCachedCatalog() {
   if (storageMode === 'gcs' && bucket) {
     try {
       const [files] = await bucket.getFiles({ prefix: 'processedSongs/' });
-      const metadataFiles = files.filter(f => f.name.endsWith('metadata.json'));
+      const completed = new Set(files.filter(f => f.name.endsWith('/multiplex.m4a')).map(f => f.name.replace(/multiplex\.m4a$/, 'metadata.json')));
+      const metadataFiles = files.filter(f => f.name.endsWith('metadata.json') && completed.has(f.name));
       
       // Fetch metadata in parallel batches (e.g., up to 20 at a time) to prevent timeouts
       // Since it's a catalog, we just grab them all for now.

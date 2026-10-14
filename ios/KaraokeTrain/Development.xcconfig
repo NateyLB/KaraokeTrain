@@ -1,0 +1,4 @@
+// Set KARAOKE_API_SECRET in the ignored LocalDevelopment.xcconfig.
+// It must match DOWNLOADER_SECRET on the development server.
+KARAOKE_API_SECRET =
+#include? "LocalDevelopment.xcconfig"

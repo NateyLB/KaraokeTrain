@@ -50,7 +50,7 @@ export async function fetchLyrics(rawTrackName, rawArtistName) {
     if (!q) continue;
     console.log(`Trying LRCLIB search: "${q}"`);
     const searchQuery = new URLSearchParams({ q });
-    response = await fetch(`https://lrclib.net/api/search?${searchQuery.toString()}`);
+    response = await fetch(`https://lrclib.net/api/search?${searchQuery.toString()}`, { signal: AbortSignal.timeout(15000) });
     
     if (response.ok) {
       const result = await response.json();

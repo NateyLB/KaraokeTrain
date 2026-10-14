@@ -46,3 +46,14 @@ testout/
 *.m4a
 
 venv/
+
+# Nested web build output (existing tracked artifacts are left untouched)
+/web/.next/
+
+# Local iOS setup and Xcode output
+**/xcuserdata/
+**/DerivedData/
+/ios/**/build/
+/ios/KaraokeTrain/LocalDevelopment.xcconfig
+/ios/**/*.mlpackage/
+**/__pycache__/

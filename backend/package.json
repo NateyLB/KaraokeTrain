@@ -2,8 +2,10 @@
   "name": "karaoke-app-backend",
   "version": "0.1.0",
   "private": true,
+  "engines": { "node": ">=22.7" },
   "scripts": {
-    "start": "node downloader-api.js"
+    "start": "node downloader-api.js",
+    "test": "node --test native-separation.test.js startup.test.mjs ../tests/*.test.mjs"
   },
   "dependencies": {
     "@google-cloud/storage": "^7.19.0",

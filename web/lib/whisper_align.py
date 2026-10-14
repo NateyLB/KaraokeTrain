@@ -11,7 +11,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--wav', required=True)
     parser.add_argument('--lyrics_file', required=False, default="")
+    parser.add_argument('--duration', type=float, default=0)
     args = parser.parse_args()
+    audio_source = os.environ["KARAOKE_WHISPER_AUDIO_URL"] if args.wav == '-' else args.wav
     
     model = WhisperModel("base", device="auto", compute_type="default")
     
@@ -19,8 +21,11 @@ def main():
     lrclib_data = []
     if args.lyrics_file:
         try:
-            with open(args.lyrics_file, 'r', encoding='utf-8') as f:
-                lrclib_data = json.load(f)
+            if args.lyrics_file == '-':
+                lrclib_data = json.load(sys.stdin)
+            else:
+                with open(args.lyrics_file, 'r', encoding='utf-8') as f:
+                    lrclib_data = json.load(f)
         except:
             pass
 
@@ -44,8 +49,8 @@ def main():
         if lyrics_sample:
             prompt_text = lyrics_sample
 
-    segments_gen, _ = model.transcribe(
-        args.wav, 
+    segments_gen, info = model.transcribe(
+        audio_source,
         word_timestamps=True, 
         condition_on_previous_text=False, 
         no_speech_threshold=0.9,
@@ -53,11 +58,12 @@ def main():
         vad_parameters=dict(min_silence_duration_ms=500),
         initial_prompt=prompt_text
     )
+    total_duration = args.duration if args.duration > 0 else max(info.duration, 1.0)
     
     whisper_segments = []
     for s in segments_gen:
         # Report progress to stderr (so Node.js can parse it)
-        progress = int((s.end / total_duration) * 100)
+        progress = min(99, int((s.end / total_duration) * 100))
         print(f"PROGRESS:{progress}", file=sys.stderr, flush=True)
             
         # Extract word-level data

@@ -1,18 +1,18 @@
 import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
-import os from 'os';
 
-export async function runWhisper(jobId, lyricsData, onProgress = null) {
+export async function runWhisper(jobId, lyricsData, onProgress = null, options = {}) {
     // Path to the separated vocals.wav
     const vocalsPath = path.join(process.cwd(), 'uploads', jobId, 'htdemucs', 'input', 'vocals.wav');
     
-    if (!fs.existsSync(vocalsPath)) {
+    if (!options.audioURL && !fs.existsSync(vocalsPath)) {
       throw new Error('Vocals track not found. Demucs may not be finished.');
     }
 
     const venvPythonPath = path.join(process.cwd(), 'venv', 'bin', 'python3');
-    const defaultPythonPath = fs.existsSync(venvPythonPath) ? venvPythonPath : 'python3';
+    const backendPythonPath = path.resolve(process.cwd(), '..', 'backend', 'venv', 'bin', 'python3');
+    const defaultPythonPath = [venvPythonPath, backendPythonPath].find(p => fs.existsSync(p)) || 'python3';
     const pythonPath = process.env.PYTHON_BIN_PATH || defaultPythonPath;
     const scriptPath = path.join(process.cwd(), 'lib', 'whisper_align.py');
 
@@ -30,7 +30,7 @@ export async function runWhisper(jobId, lyricsData, onProgress = null) {
             if (typeof version === 'string') {
                 parsedLines = version.split('\n').map(l => ({ text: l.replace(/\[.*?\]/g, '').trim() })).filter(l => l.text);
             } else if (typeof version === 'object') {
-                isKorean = version.hasHangul || false;
+                isKorean = version.hasHangul || /[\uac00-\ud7a3]/.test(version.syncedLyrics || version.plainLyrics || '');
                 if (version.syncedLyrics) {
                     const timeRegex = /\[(\d{2}):(\d{2})\.(\d{2,3})\]/;
                     const lines = version.syncedLyrics.split('\n');
@@ -85,43 +85,52 @@ export async function runWhisper(jobId, lyricsData, onProgress = null) {
         });
     }
 
-    // Create a temporary file for lyrics text to avoid shell escaping issues with huge strings
-    const lyricsFilePath = path.join(process.cwd(), 'uploads', jobId, 'lyrics.json');
-    fs.writeFileSync(lyricsFilePath, JSON.stringify(formattedLyrics), 'utf8');
-
-    const cmdArgs = [scriptPath, '--wav', vocalsPath, '--lyrics_file', lyricsFilePath];
+    // Stream lyrics over stdin and GCS audio over HTTP; native jobs need no local files.
+    // Keep the authenticated URL out of process arguments and logs.
+    const cmdArgs = [scriptPath, '--wav', options.audioURL ? '-' : vocalsPath, '--lyrics_file', '-'];
+    if (Number.isFinite(options.duration) && options.duration > 0) {
+      cmdArgs.push('--duration', String(options.duration));
+    }
 
     return new Promise((resolve, reject) => {
-      const pythonProcess = spawn(pythonPath, cmdArgs);
+      const pythonProcess = spawn(pythonPath, cmdArgs, {
+        env: { ...process.env, ...(options.audioURL ? { KARAOKE_WHISPER_AUDIO_URL: options.audioURL } : {}) },
+      });
+      const timeout = setTimeout(() => {
+        pythonProcess.kill('SIGKILL');
+        reject(new Error('Lyric transcription timed out. Audio is still cached; retry lyrics.'));
+      }, 20 * 60 * 1000);
+      pythonProcess.once('error', error => { clearTimeout(timeout); reject(error); });
+      pythonProcess.stdin.on('error', () => {}); // Child failure is handled above/on close.
+      pythonProcess.stdin.end(JSON.stringify(formattedLyrics));
       
       let stdoutData = '';
       let stderrData = '';
 
       pythonProcess.stdout.on('data', (data) => {
         stdoutData += data.toString();
+        if (stdoutData.length > 8 * 1024 * 1024) pythonProcess.kill('SIGKILL');
       });
 
       pythonProcess.stderr.on('data', (data) => {
         const text = data.toString();
-        stderrData += text;
+        stderrData = (stderrData + text).slice(-8000);
         
         // Parse dynamic progress
         const match = text.match(/PROGRESS:(\d+)/);
         if (match && onProgress) {
             onProgress(parseInt(match[1], 10));
         } else {
-            console.error(`Whisper stderr: ${text}`);
+            console.error(`Whisper stderr: ${options.audioURL ? text.split(options.audioURL).join('[audio stream]') : text}`);
         }
       });
 
       pythonProcess.on('close', (code) => {
-        // Cleanup temp file
-        if (fs.existsSync(lyricsFilePath)) {
-          fs.unlinkSync(lyricsFilePath);
-        }
+        clearTimeout(timeout);
 
         if (code !== 0) {
-          return reject(new Error(`Whisper exited with code ${code}. Details: ${stderrData}`));
+          const safeError = options.audioURL ? stderrData.split(options.audioURL).join('[audio stream]') : stderrData;
+          return reject(new Error(`Whisper exited with code ${code}. Details: ${safeError}`));
         }
 
         try {
