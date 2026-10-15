@@ -22,6 +22,7 @@ compile_and_run events "$native_sources/ServerEventDecoder.swift" "$native_test_
 compile_and_run contract "$native_sources/ServerConfiguration.swift" "$native_sources/ServerEventDecoder.swift" "$native_sources/Models.swift" "$native_sources/PartyViewModel.swift" "$native_sources/SongSearchModel.swift" "$native_test_root/Tests/WebParitySmoke.swift"
 compile_and_run service "$native_sources/Models.swift" "$native_sources/SongPreparationState.swift" "$native_sources/ServerSongService.swift" "$native_test_root/Tests/ServerSongServiceSmoke.swift"
 compile_and_run overlap "$native_sources/DemucsOverlap.swift" "$native_test_root/Tests/OverlapSmoke.swift"
+compile_and_run benchmark "$native_sources/StemSeparationMetrics.swift" "$native_sources/BenchmarkReportFile.swift" "$native_test_root/Tests/BenchmarkReportSmoke.swift"
 compile_and_run microphone "$native_sources/PitchDetector.swift" "$native_sources/AudioCaptureContracts.swift" "$native_sources/MicrophoneModel.swift" "$native_test_root/Tests/MicrophoneSmoke.swift"
 compile_and_run effects "$native_sources/AudioEngineConnections.swift" "$native_sources/VocalEffectsGraph.swift" "$native_test_root/Tests/VocalEffectsSmoke.swift"
 compile_and_run recording "$native_sources/RecordingTimeline.swift" "$native_sources/RecordingFiles.swift" "$native_sources/RecordingAudioRenderer.swift" "$native_sources/MicrophoneRecordingWriter.swift" "$native_sources/RecordingExporter.swift" "$native_test_root/Tests/RecordingSmoke.swift"

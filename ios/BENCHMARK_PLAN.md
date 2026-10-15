@@ -1,6 +1,6 @@
 # iPhone versus Mac mini processing benchmark
 
-No phone timing has been measured in this continuation. The restored iOS implementation sets `MLModelConfiguration.computeUnits = .cpuOnly`. Apple's [compute-unit options](https://developer.apple.com/documentation/coreml/mlcomputeunits) permit CPU/GPU/Neural Engine selection, but allowing an accelerator does not establish how much of this converted Demucs graph it will execute or its end-to-end speed.
+The first user-reported phone run completed ten seconds of generated audio in 15.473 seconds with CPU + GPU, unchanged nominal thermal state, and 11,514 MiB system-reported physical memory. The old report did not identify its hardware model. See [the raw result and interpretation](Benchmarks/2026-10-14-cpu-gpu.md). The restored iOS implementation sets `MLModelConfiguration.computeUnits = .cpuOnly`. Apple's [compute-unit options](https://developer.apple.com/documentation/coreml/mlcomputeunits) permit CPU/GPU/Neural Engine selection, but allowing an accelerator does not establish how much of this converted Demucs graph it will execute or its end-to-end speed.
 
 Before choosing a default:
 
@@ -17,3 +17,5 @@ An API-backed client leaves room to add an on-device worker later if these measu
 The Debug app now includes Help → Device stem benchmark with CPU / CPU + GPU / All available modes. It requires the existing model package and records a synthetic cold-load-inclusive run. Complete the real-song, memory and end-to-end measurements above before choosing a production on-device path.
 
 The existing 222 MiB model is now present locally at `KaraokeTrain/KaraokeTrain/HTDemucs_CoreML.mlpackage` after the authorized move from Downloads. Its weights SHA-256 is `37c5f1a450b156943fcd966d533f20e35a2aa287d5d7a536a113f8b549eaa41b`. Debug model compilation passed. It remains ignored in Git and excluded from Release builds. The owner selected iPhone 18 for device testing; the paired iPhone Air is not the benchmark target.
+
+The benchmark now offers 10-second quick and 30-second warm-timing workloads. It reports model-load time, every prediction API call, Swift input/output processing, padding, and warm full-window inference medians when available. Model instances are fresh, but Core ML system caching is not reset. The hardware identifier is included to distinguish physical models and simulator/Mac measurements. Sharing explicitly exports UTF-8 `.txt`, with Copy report as an alternative. The normal separation algorithm and server-backed playback are unchanged.

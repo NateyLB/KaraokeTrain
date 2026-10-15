@@ -43,12 +43,12 @@ public actor StemSeparator {
 
     /// GCS-backed source and sink. Only one model segment and one overlap tail
     /// are retained; no full-song buffers or local audio files.
-    public func separate(
+    @discardableResult public func separate(
         totalFrames: Int, mean: Double, standardDeviation: Double,
         fetch: @Sendable (Int) async throws -> Data,
         upload: @Sendable (Int, Data) async throws -> Void,
         progress: @Sendable (Double) async -> Void
-    ) async throws {
+    ) async throws -> StemSeparationMetrics {
         guard !busy else {
             throw StemSeparatorError.invalid("The previous model segment is still stopping. Please retry shortly.")
         }
@@ -60,7 +60,11 @@ public actor StemSeparator {
         }
         try Task.checkCancellation()
         try checkResources()
+        let started = ProcessInfo.processInfo.systemUptime
+        let loadStarted = ProcessInfo.processInfo.systemUptime
         _ = try loadModel()
+        let modelLoadSeconds = ProcessInfo.processInfo.systemUptime - loadStarted
+        var predictions: [StemPredictionMetrics] = []
         var assembler = DemucsOverlap()
         let count = (totalFrames + Self.hopFrames - 1) / Self.hopFrames
 
@@ -77,12 +81,15 @@ public actor StemSeparator {
                 try predict(pcm: pcm, validFrames: validFrames, mean: Float(mean), std: Float(standardDeviation))
             }
             try Task.checkCancellation()
-            let emitted = assembler.append(predicted, validFrames: validFrames)
+            predictions.append(predicted.metrics)
+            let emitted = assembler.append(predicted.samples, validFrames: validFrames)
             // Apple devices use little-endian IEEE Float32. No file-backed upload.
             let bytes = emitted.withUnsafeBytes { Data($0) }
             try await upload(index, bytes)
             await progress(Double(index + 1) / Double(count))
         }
+        return StemSeparationMetrics(modelLoadSeconds: modelLoadSeconds, predictions: predictions,
+                                     elapsedSeconds: ProcessInfo.processInfo.systemUptime - started)
     }
 
     private func checkResources() throws {
@@ -99,7 +106,8 @@ public actor StemSeparator {
         #endif
     }
 
-    private func predict(pcm: Data, validFrames: Int, mean: Float, std: Float) throws -> [Float] {
+    private func predict(pcm: Data, validFrames: Int, mean: Float, std: Float) throws -> (samples: [Float], metrics: StemPredictionMetrics) {
+        let started = ProcessInfo.processInfo.systemUptime
         let model = try loadModel()
         let input = try MLMultiArray(shape: [1, 2, NSNumber(value: Self.segmentFrames)], dataType: .float32)
         let inputStrides = input.strides.map(\.intValue)
@@ -115,7 +123,10 @@ public actor StemSeparator {
                 }
             }
         }
-        let result = try model.prediction(from: MLDictionaryFeatureProvider(dictionary: ["audio": input]))
+        let provider = try MLDictionaryFeatureProvider(dictionary: ["audio": input])
+        let inferenceStarted = ProcessInfo.processInfo.systemUptime
+        let result = try model.prediction(from: provider)
+        let inferenceEnded = ProcessInfo.processInfo.systemUptime
         guard let output = result.featureValue(for: "sources")?.multiArrayValue,
               output.shape.map(\.intValue) == [1, 4, 2, Self.segmentFrames] else {
             throw StemSeparatorError.invalid("Demucs returned an unexpected output shape.")
@@ -147,6 +158,8 @@ public actor StemSeparator {
         default:
             throw StemSeparatorError.invalid("Unsupported Demucs output numeric type.")
         }
-        return stereo
+        return (stereo, StemPredictionMetrics(validFrames: validFrames, inputSeconds: inferenceStarted - started,
+                                               inferenceSeconds: inferenceEnded - inferenceStarted,
+                                               outputSeconds: ProcessInfo.processInfo.systemUptime - inferenceEnded))
     }
 }
