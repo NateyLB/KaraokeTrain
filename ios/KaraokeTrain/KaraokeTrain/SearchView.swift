@@ -250,7 +250,7 @@ struct SongBrowserView: View {
 
     private func loadCatalog() {
         guard isLoadingCatalog, let url = URL(string: "\(serverURL)/api/catalog") else { return }
-        URLSession.shared.dataTask(with: url) { data, response, error in
+        URLSession.shared.dataTask(with: ServerAccess.authorize(URLRequest(url: url))) { data, response, error in
             let decoded = data.flatMap { try? JSONDecoder().decode([Track].self, from: $0) } ?? []
             DispatchQueue.main.async {
                 catalog = decoded

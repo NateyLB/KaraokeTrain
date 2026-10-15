@@ -247,7 +247,7 @@ class PartyViewModel: ObservableObject {
                     request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
                     request.cachePolicy = .reloadIgnoringLocalCacheData
                     request.timeoutInterval = 3600
-                    let (bytes, response) = try await session.bytes(for: request)
+                    let (bytes, response) = try await session.bytes(for: ServerAccess.authorize(request))
                     guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
                     var decoder = ServerEventDecoder()
                     for try await byte in bytes {
@@ -289,7 +289,7 @@ class PartyViewModel: ObservableObject {
             request.cachePolicy = .reloadIgnoringLocalCacheData
             request.timeoutInterval = 12
 
-            let (data, response) = try await session.data(for: request)
+            let (data, response) = try await session.data(for: ServerAccess.authorize(request))
             guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
                 throw URLError(.badServerResponse)
             }
@@ -326,7 +326,7 @@ class PartyViewModel: ObservableObject {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await session.data(for: ServerAccess.authorize(request))
         guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
             let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
             if (response as? HTTPURLResponse)?.statusCode == 409,

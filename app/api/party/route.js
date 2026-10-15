@@ -1,3 +1,5 @@
+import { checkCache } from '../../../lib/storage/index.js';
+import { withAccess, roomAccess, accessEnabled, limitAccess } from '../../../lib/access/server.js';
 import { NextResponse } from 'next/server';
 import { partyStore } from '../../../lib/party/partyStore';
 import { songProcessing } from '../../../lib/processing/index';
@@ -10,7 +12,7 @@ import { validatedSettings, REMOTE_COMMANDS } from '../../../lib/party/settings'
 
 const MAX_QUEUE_SIZE = 20;
 
-export async function GET(request) {
+async function handleGET(request, principal) {
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');
 
@@ -18,12 +20,13 @@ export async function GET(request) {
     return NextResponse.json({ error: 'A valid Party ID is required' }, { status: 400 });
   }
 
+  roomAccess(principal, id, 'read');
   const party = partyStore.get(id.toUpperCase());
   
   return NextResponse.json(partyPayload(party));
 }
 
-export async function POST(request) {
+async function handlePOST(request, principal) {
   let requestedPartyId;
   try {
     // Rate limit by IP
@@ -40,6 +43,7 @@ export async function POST(request) {
       return NextResponse.json({ error: 'A valid Party ID is required' }, { status: 400 });
     }
 
+    roomAccess(principal, id, action === 'add' ? 'add' : 'control');
     const partyId = id.toUpperCase();
     requestedPartyId = partyId;
     let updatedParty;
@@ -64,6 +68,7 @@ export async function POST(request) {
         artist: typeof song.artist === 'string' ? song.artist.slice(0, 200) : 'Unknown artist',
         art: `https://i.ytimg.com/vi/${song.videoId}/hqdefault.jpg`,
       };
+      if (accessEnabled() && !await checkCache(cleanSong.videoId)) limitAccess(`queue-add:${principal.id}`, principal.role === 'guest' ? 3 : 20, 60 * 60 * 1000);
       await songProcessing.start(cleanSong);
       const jobId = song.videoId;
 
@@ -121,3 +126,7 @@ export async function POST(request) {
     }, { status: error.status || 500 });
   }
 }
+
+export const GET = withAccess(['owner', 'host', 'guest'], handleGET);
+
+export const POST = withAccess(['owner', 'host', 'guest'], handlePOST);

@@ -1,4 +1,5 @@
 'use client';
+import { apiFetch } from '../lib/access/client';
 import { useEffect, useRef, useState } from 'react';
 import useKaraokeStore from '../store/useKaraokeStore';
 
@@ -20,7 +21,7 @@ export function useSongSearch() {
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch('/api/catalog', { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(30000)]) })
+    apiFetch('/api/catalog', { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(30000)]) })
       .then(async response => {
         const data = await response.json();
         if (!response.ok || !Array.isArray(data)) throw new Error('Saved songs are temporarily unavailable.');
@@ -69,7 +70,7 @@ export function useSongSearch() {
     setIsAskingDJ(wantsDJ); setIsSearching(!wantsDJ); setHasSearched(true); setDjResponse(null); setResults([]); setSearchError('');
     try {
       const party = useKaraokeStore.getState().partyState;
-      const response = await fetch(wantsDJ ? '/api/dj' : `/api/search?q=${encodeURIComponent(text)}`, {
+      const response = await apiFetch(wantsDJ ? '/api/dj' : `/api/search?q=${encodeURIComponent(text)}`, {
         signal: AbortSignal.any([controller.signal, AbortSignal.timeout(wantsDJ ? 65000 : 20000)]),
         ...(wantsDJ ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
           prompt: text, history: party?.history || [], currentSong: party?.currentSong, queue: party?.queue || [],

@@ -67,7 +67,7 @@ nonisolated final class RecordingMediaDownload: NSObject, URLSessionDownloadDele
                 configuration.timeoutIntervalForResource = 600
                 let session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
                 self.session = session
-                let task = session.downloadTask(with: url)
+                let task = session.downloadTask(with: ServerAccess.authorize(URLRequest(url: url)))
                 self.task = task; task.resume()
             }
         } onCancel: { self.cancel() }

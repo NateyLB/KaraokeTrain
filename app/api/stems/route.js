@@ -1,9 +1,10 @@
+import { withAccess } from '../../../lib/access/server.js';
 import { NextResponse } from 'next/server';
 import { getFileStream } from '../../../lib/storage/index';
 import { createAudioResponse } from '../../../lib/audio/httpResponse';
 import { isValidJobId, isValidStem } from '../../../lib/http/validators';
 
-export async function GET(request) {
+async function handleGET(request) {
   const { searchParams } = new URL(request.url);
   const jobId = searchParams.get('jobId');
   const stem = searchParams.get('stem');
@@ -27,3 +28,5 @@ export async function GET(request) {
     return new NextResponse('Audio is temporarily unavailable. Please try again.', { status: 503 });
   }
 }
+
+export const GET = withAccess(['owner', 'host'], handleGET);

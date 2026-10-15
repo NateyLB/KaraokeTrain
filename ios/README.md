@@ -50,3 +50,20 @@ The requested test device is **iPhone 18**. Xcode currently lists an iPhone 18 P
 The original `DEVICE_TESTING.md`, `MODEL_SETUP.md` and `PORT_PARITY.md` are historical references. Shared hosting options and approval boundaries remain in [SHARED_BACKEND_PLAN.md](../docs/SHARED_BACKEND_PLAN.md).
 
 Latest verification: Debug and Release builds pass; the app launches and remains running on the iPhone 18 Pro simulator. All offline native checks, real cached AAC stream/mixer playback, real cached M4A recording export and isolated room/SSE checks passed. The transient job-status live check cannot run against the old cached ID after the server job registry reset (404); `--live-media` verifies persistent media without reprocessing. Physical recording, lip sync, UI parity and a hardware-identified warm iPhone 18 benchmark remain pending.
+
+## Account-free remote access (October 15)
+
+The owner approved one-time device pairing and expiring room invitations instead
+of app accounts. Server connection accepts a scanned QR code or pasted HTTPS
+link, stores its exact-origin credential in Keychain, and uses scoped bearer
+headers plus AVFoundation media cookies. Native hosts can create guest
+invitations. Guests cannot host or change playback/queue settings. Long public
+lyric repairs use asynchronous status polling. The production default is
+`https://app.karaoketrain.com`; a paired origin takes precedence, while Debug
+retains the existing local bundle configuration when unpaired. Existing owner
+Xcode/privacy edits remain untouched.
+
+The source builds in Debug/Release and native regressions pass, including
+credential origin isolation and asynchronous repair polling. The new native
+build still needs installation and a physical iPhone/cellular test after
+Cloudflare activates. See [the live deployment checkpoint](../docs/REMOTE_ACCESS.md).

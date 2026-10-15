@@ -1,8 +1,9 @@
+import { withAccess } from '../../../../lib/access/server.js';
 import { NextResponse } from 'next/server';
 import { jobQueue } from '../../../../lib/processing/jobQueue';
 import { isValidJobId } from '../../../../lib/http/validators';
 
-export async function GET(request) {
+async function handleGET(request) {
   const { searchParams } = new URL(request.url);
   const jobId = searchParams.get('jobId');
 
@@ -17,3 +18,5 @@ export async function GET(request) {
 
   return NextResponse.json(status);
 }
+
+export const GET = withAccess(['owner', 'host'], handleGET);

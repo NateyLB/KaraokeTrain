@@ -56,7 +56,7 @@ final class SongSearchModel: ObservableObject {
                     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
                     request.httpBody = try JSONSerialization.data(withJSONObject: body)
                 }
-                let (data, response) = try await URLSession.shared.data(for: request)
+                let (data, response) = try await URLSession.shared.data(for: ServerAccess.authorize(request))
                 try Task.checkCancellation()
                 guard generation == token else { return }
                 guard (response as? HTTPURLResponse)?.statusCode == 200 else {

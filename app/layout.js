@@ -1,6 +1,7 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Toast from "../components/Toast";
+import AccessBoundary from '../components/access/AccessBoundary';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -28,7 +29,7 @@ export default function RootLayout({ children }) {
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
       <body>
         <main className="container">
-          {children}
+          <AccessBoundary>{children}</AccessBoundary>
         </main>
         <Toast />
       </body>

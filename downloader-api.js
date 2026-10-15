@@ -94,12 +94,11 @@ app.get('/download', (req, res) => {
   });
 });
 
-const server = app.listen(PORT, error => {
+const server = app.listen(PORT, process.env.DOWNLOADER_HOST || '127.0.0.1', error => {
   if (error) return; // Express 5 forwards listen errors to this callback.
   console.log(`[DOWNLOADER] Local Downloader API running on http://localhost:${PORT}`);
   console.log('[DOWNLOADER] YouTube audio is downloaded with yt-dlp.');
-  console.log(`[DOWNLOADER] To expose this server to the internet via Cloudflare Tunnels:`);
-  console.log(`[DOWNLOADER] cloudflared tunnel --url http://localhost:${PORT}`);
+  console.log('[DOWNLOADER] Keep this service private; clients use the authenticated web API.');
 });
 server.on('error', error => {
   console.error(`[DOWNLOADER] Could not listen on port ${PORT}: ${error.code}`);

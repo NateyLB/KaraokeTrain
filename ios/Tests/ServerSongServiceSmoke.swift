@@ -41,6 +41,15 @@ struct ServerSongServiceSmoke {
         assert(URLComponents(url: requests[0].url!, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "title" })?.value == "Song & another=value")
         let body = try JSONDecoder().decode([String:String].self, from: requests[1].httpBody!)
         assert(body == ["jobId":"abcdefghijk"])
+        let asynchronous = SongTransport([(202, #"{"status":"processing"}"#),
+            (200, #"{"status":"processing"}"#),
+            (200, #"{"status":"ready","result":{"source":"qwen_transcription","lyrics":[]}}"#)])
+        service.transport = { try await asynchronous.send($0) }
+        let repaired = try await service.repairLyrics(jobID: "abcdefghijk")
+        let repairedState = try JSONSerialization.jsonObject(with: repaired) as? [String: Any]
+        assert(repairedState?["source"] as? String == "qwen_transcription")
+        let asynchronousRequests = await asynchronous.requests
+        assert(asynchronousRequests.map { $0.httpMethod } == ["POST", "GET", "GET"])
         let failed = SongTransport([(503, #"{"error":"Storage unavailable"}"#)])
         service.transport = { try await failed.send($0) }
         do { _ = try await service.waitForSong(jobID: "abcdefghijk") { _, _ in }; assertionFailure() }

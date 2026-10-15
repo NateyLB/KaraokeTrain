@@ -11,7 +11,7 @@ nonisolated struct ServerSongService: Sendable {
     var pollInterval: Duration = .seconds(2)
     var timeout: TimeInterval = 20 * 60
     var transport: Transport = { request in
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await URLSession.shared.data(for: ServerAccess.authorize(request))
         guard let response = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
         return (data, response)
     }
@@ -82,6 +82,21 @@ nonisolated struct ServerSongService: Sendable {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONEncoder().encode(["jobId": jobID])
         request.timeoutInterval = 30 * 60
-        return try await send(request)
+        let initial = try await send(request)
+        let state = try? JSONSerialization.jsonObject(with: initial) as? [String: Any]
+        guard state?["status"] as? String == "processing" else { return initial }
+        let deadline = Date().addingTimeInterval(30 * 60)
+        while Date() < deadline {
+            try await Task.sleep(for: pollInterval)
+            var status = URLRequest(url: try url("/api/lyrics/sync", query: [.init(name: "jobId", value: jobID)]))
+            status.timeoutInterval = 20; status.cachePolicy = .reloadIgnoringLocalCacheData
+            let data = try await send(status)
+            guard let state = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw URLError(.cannotParseResponse) }
+            if state["status"] as? String == "error" { throw SongServiceError(message: state["error"] as? String ?? "Lyrics could not be updated.") }
+            if state["status"] as? String == "ready", let result = state["result"] {
+                return try JSONSerialization.data(withJSONObject: result)
+            }
+        }
+        throw SongServiceError(message: "The lyric repair is taking longer than expected.")
     }
 }

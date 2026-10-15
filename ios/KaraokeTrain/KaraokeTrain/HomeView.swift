@@ -1,11 +1,14 @@
 import SwiftUI
 
 struct HomeView: View {
+    var initialRoom: String? = nil
     @StateObject private var partyViewModel = PartyViewModel()
     @State private var joinCode = ""
     @FocusState private var isInputFocused: Bool
     @State private var navigateToRoom = false
     @State private var showInfo = false
+
+    private var canHost: Bool { ServerAccess.credential()?.role != "guest" }
 
     let bgDark = Color(red: 10/255, green: 5/255, blue: 20/255)
     let bgStart = Color(red: 16/255, green: 8/255, blue: 36/255)
@@ -37,6 +40,7 @@ struct HomeView: View {
                             .font(.subheadline).foregroundStyle(.white.opacity(0.65)).multilineTextAlignment(.center)
                     }.padding(.bottom, 20)
                     // Host Button
+                    if canHost {
                     Button(action: {
                         Task { navigateToRoom = await partyViewModel.hostParty() }
                     }) {
@@ -63,6 +67,7 @@ struct HomeView: View {
                                 .stroke(primaryAccent.opacity(0.6), lineWidth: 2)
                         )
                         .cornerRadius(16)
+                    }
                     }
                     Text("OR").font(.subheadline.bold()).foregroundStyle(.white.opacity(0.5))
 
@@ -150,6 +155,9 @@ struct HomeView: View {
         )) {
             Button("OK") { partyViewModel.errorMessage = nil }
         } message: { Text(partyViewModel.errorMessage ?? "Could not connect.") }
+        .task {
+            if let initialRoom { navigateToRoom = await partyViewModel.joinParty(code: initialRoom) }
+        }
     }
 }
 

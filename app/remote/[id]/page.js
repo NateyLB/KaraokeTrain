@@ -1,6 +1,7 @@
 "use client";
 
 import { use } from 'react';
+import { useAccess } from '../../../components/access/AccessBoundary';
 import RemoteQueueDrawer from '../../../components/queue/RemoteQueueDrawer';
 import SearchBar from '../../../components/SearchBar';
 import RemoteControls from '../../../components/RemoteControls';
@@ -9,6 +10,7 @@ import { usePartyActions } from '../../../hooks/usePartyActions';
 import OverlayButtons from '../../../components/OverlayButtons';
 
 export default function RemotePage({ params }) {
+  const access = useAccess();
   const unwrappedParams = use(params);
   const roomId = unwrappedParams.id.toUpperCase();
 
@@ -34,7 +36,7 @@ export default function RemotePage({ params }) {
       </div>
 
       {/* Remote Playback Controls */}
-      <RemoteControls roomId={roomId} />
+      {access.role !== 'guest' && <RemoteControls roomId={roomId} />}
 
       <div style={{ flex: 1 }}></div>
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { Play, ChevronUp, ChevronDown, Trash2 } from 'lucide-react';
+import { useAccess } from '../access/AccessBoundary';
 import SongArtwork from '../SongArtwork';
 import { usePartyActions } from '../../hooks/usePartyActions';
 
@@ -20,6 +21,7 @@ function QueueButton({ label, disabled, onClick, color = 'white', children }) {
 }
 
 export default function QueueList({ roomId, partyState, emptyMessage = 'Queue is empty.' }) {
+  const access = useAccess();
   const { removeSong, playNow, reorderSong, nextSong } = usePartyActions(roomId);
   const current = partyState?.currentSong;
   const waiting = current && ['pending', 'processing', 'error'].includes(current.jobStatus?.status) ? current : null;
@@ -39,12 +41,12 @@ export default function QueueList({ roomId, partyState, emptyMessage = 'Queue is
           <p style={{ fontSize: '0.75rem', opacity: 0.6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{song.artist}</p>
         </div>
         <QueueStatus job={song.jobStatus} />
-        <div style={{ display: 'flex', alignItems: 'center' }}>
+        {access.role !== 'guest' && <div style={{ display: 'flex', alignItems: 'center' }}>
           {song.jobStatus?.status === 'ready' && !isCurrent && <QueueButton label={`Play ${song.title} now`} color="#4ade80" onClick={() => playNow(index, song)}><Play size={18} /></QueueButton>}
           <QueueButton label={`Move ${song.title} up`} disabled={isCurrent || index === 0} onClick={() => reorderSong(index, index - 1, song, queue[index - 1])}><ChevronUp size={18} /></QueueButton>
           <QueueButton label={`Move ${song.title} down`} disabled={isCurrent || index === queue.length - 1} onClick={() => reorderSong(index, index + 1, song, queue[index + 1])}><ChevronDown size={18} /></QueueButton>
           <QueueButton label={`Remove ${song.title}`} color="#ef4444" onClick={() => isCurrent ? nextSong(song) : removeSong(index, song)}><Trash2 size={18} /></QueueButton>
-        </div>
+        </div>}
       </div>;
     })}
   </div>;

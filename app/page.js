@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from 'react';
+import { useAccess } from '../components/access/AccessBoundary';
 import { Music2, Tv, Smartphone } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { getAudioRuntime } from '../lib/audio/runtime';
@@ -9,6 +10,7 @@ import OverlayButtons from '../components/OverlayButtons';
 
 export default function Home() {
   const router = useRouter();
+  const access = useAccess();
   const [joinCode, setJoinCode] = useState('');
 
   const hostParty = () => {
@@ -50,9 +52,10 @@ export default function Home() {
         
         {/* Host Button */}
         <button 
+          hidden={access.role === 'guest'}
           onClick={hostParty}
           className="glass-panel hover-glow" 
-          style={{ padding: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', border: '2px solid var(--primary-accent)' }}
+          style={{ padding: '2rem', display: access.role === 'guest' ? 'none' : 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', border: '2px solid var(--primary-accent)' }}
         >
           <Tv size={48} color="var(--primary-accent)" />
           <div>

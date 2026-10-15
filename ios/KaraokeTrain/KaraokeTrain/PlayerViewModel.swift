@@ -222,7 +222,7 @@ class PlayerViewModel: ObservableObject {
     }
 
     private func setupPlayer(with url: URL, token: UUID) async throws {
-        let asset = AVURLAsset(url: url)
+        let asset = AVURLAsset(url: url, options: [AVURLAssetHTTPCookiesKey: ServerAccess.cookies(for: url)])
         let (tracks, duration) = try await withTaskCancellationHandler {
             let tracks = try await asset.loadTracks(withMediaType: .audio)
             let duration = try await asset.load(.duration)

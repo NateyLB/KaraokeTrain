@@ -1,3 +1,5 @@
+import { withAccess, requireRole, accessEnabled } from '../../../../lib/access/server.js';
+import { RepairJobs } from '../../../../lib/lyrics/RepairJobs.js';
 import { NextResponse } from 'next/server';
 import { runLyricsEngine } from '../../../../lib/lyrics/engine';
 import { isValidJobId } from '../../../../lib/http/validators';
@@ -9,8 +11,10 @@ import { readJsonObject } from '../../../../lib/http/requestBody';
 import { processingScheduler } from '../../../../lib/processing/index';
 import { cachedCandidates, isLRCLIB, metadataHash, publicationPlan, validateMaintenance } from '../../../../lib/lyrics/cacheMaintenance';
 
+if (!global.karaokeLyricRepairs) global.karaokeLyricRepairs = new RepairJobs();
+const repairs = global.karaokeLyricRepairs;
 
-export async function POST(request) {
+async function handlePOST(request, principal) {
   // Rate limit expensive transcription/alignment requests.
   const clientIp = getClientIp(request);
   const rateCheck = checkRateLimit(`whisper:${clientIp}`, { maxRequests: 3, windowMs: 60000 });
@@ -22,12 +26,13 @@ export async function POST(request) {
     const body = await readJsonObject(request);
     const { jobId } = body;
     const maintenance = validateMaintenance(body);
+    if (maintenance) requireRole(principal, ['owner']);
 
     if (!jobId || !isValidJobId(jobId)) {
       return NextResponse.json({ error: 'A valid Job ID is required' }, { status: 400 });
     }
 
-    const response = await processingScheduler.submit(`lyrics:${jobId}`, async () => {
+    const operation = () => processingScheduler.submit(`lyrics:${jobId}`, async () => {
       const existingMetadata = await checkCache(jobId);
       if (!existingMetadata) throw Object.assign(new Error('Processed song not found'), { status: 404 });
       if (maintenance && existingMetadata.lyricsMaintenance?.runId === body.runId) {
@@ -65,10 +70,19 @@ export async function POST(request) {
       const { transcription: _transcription, ...payload } = published;
       return { ...payload, lyricsRevision: saved.lyricsRevision, ...(report ? { maintenance: report } : {}) };
     });
-    return NextResponse.json(response);
+    if (accessEnabled() && !maintenance) return NextResponse.json(repairs.start(jobId, operation), { status: 202 });
+    return NextResponse.json(await operation());
 
   } catch (err) {
     console.error('Lyrics sync error:', err);
     return NextResponse.json({ error: err.status >= 400 && err.status < 500 ? err.message : 'An internal error occurred' }, { status: err.status || 500 });
   }
 }
+
+export const POST = withAccess(['owner', 'host'], handlePOST);
+export const GET = withAccess(['owner', 'host'], async request => {
+  const jobId = new URL(request.url).searchParams.get('jobId');
+  if (!isValidJobId(jobId)) return Response.json({ error: 'A valid job ID is required.' }, { status: 400 });
+  const state = repairs.status(jobId);
+  return Response.json(state || { error: 'Repair not found. Please retry.' }, { status: state ? 200 : 404 });
+});

@@ -1,0 +1,11 @@
+# Copy to .runtime/cloudflared/config.yml after creating the named tunnel.
+# Never commit the real tunnel credential or token.
+tunnel: REPLACE_WITH_TUNNEL_UUID
+credentials-file: /Users/nathan/source/KaraokeTrain/.runtime/cloudflared/REPLACE_WITH_TUNNEL_UUID.json
+ingress:
+  - hostname: app.karaoketrain.com
+    service: http://127.0.0.1:3100
+    originRequest:
+      httpHostHeader: app.karaoketrain.com
+      connectTimeout: 10s
+  - service: http_status:404

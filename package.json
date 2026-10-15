@@ -16,7 +16,10 @@
     "test:party": "node --test tests/party-client.test.mjs tests/party-settings.test.mjs tests/queue-concurrency.test.mjs tests/settings-sync.test.mjs tests/validators.test.mjs",
     "test:ios": "./ios/run-tests.sh",
     "test": "node --test tests/*.test.mjs && venv/bin/python -m unittest discover -s tests -p 'test_*.py'",
-    "test:processing": "node --test tests/processing.test.mjs tests/process-runner.test.mjs tests/audio-resources.test.mjs tests/song-loading.test.mjs tests/storage.test.mjs tests/party-settings.test.mjs"
+    "test:processing": "node --test tests/processing.test.mjs tests/process-runner.test.mjs tests/audio-resources.test.mjs tests/song-loading.test.mjs tests/storage.test.mjs tests/party-settings.test.mjs",
+    "access": "node --env-file=.env.local --env-file=.env.production.local tools/access.mjs",
+    "build:server": "KARAOKE_BUILD_DIR=.next-production next build --webpack",
+    "start:server": "KARAOKE_BUILD_DIR=.next-production next start --hostname 127.0.0.1 --port 3100"
   },
   "dependencies": {
     "@google-cloud/storage": "^7.19.0",
@@ -27,6 +30,7 @@
     "lucide-react": "^1.16.0",
     "next": "16.4.0",
     "pinyin": "^4.0.0",
+    "qrcode": "1.5.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-youtube": "^10.1.0",

@@ -1,3 +1,4 @@
+import { withAccess, roomAccess, streamLease } from '../../../../lib/access/server.js';
 export const dynamic = 'force-dynamic';
 
 import { partyStore } from '../../../../lib/party/partyStore';
@@ -5,13 +6,15 @@ import { jobQueue } from '../../../../lib/processing/jobQueue';
 import { partyPayload } from '../../../../lib/party/payload';
 import { isValidPartyId } from '../../../../lib/http/validators';
 
-export async function GET(request) {
+async function handleGET(request, principal) {
   const id = new URL(request.url).searchParams.get('id');
   if (!id || !isValidPartyId(id)) {
     return Response.json({ error: 'A valid Party ID is required' }, { status: 400 });
   }
 
+  roomAccess(principal, id, 'read');
   const partyId = id.toUpperCase();
+  const lease = streamLease(request, principal, partyId);
   let cleanup = () => {};
   const stream = new ReadableStream({
     start(controller) {
@@ -23,6 +26,7 @@ export async function GET(request) {
 
       const send = text => {
         if (closed) return;
+        if (!lease.valid()) { cleanup(); return; }
         try { controller.enqueue(encoder.encode(text)); }
         catch { cleanup(); }
       };
@@ -31,6 +35,7 @@ export async function GET(request) {
       cleanup = () => {
         if (closed) return;
         closed = true;
+        lease.close();
         clearInterval(pingInterval);
         unsubscribeJobs();
         global.partyEvents?.off(eventName, onUpdate);
@@ -48,7 +53,7 @@ export async function GET(request) {
         }
       });
       sendParty(partyStore.get(partyId));
-      if (!closed) pingInterval = setInterval(() => send(': ping\n\n'), 30000);
+      if (!closed) pingInterval = setInterval(() => send(': ping\n\n'), 15000);
     },
     cancel() { cleanup(); },
   });
@@ -61,3 +66,5 @@ export async function GET(request) {
     },
   });
 }
+
+export const GET = withAccess(['owner', 'host', 'guest'], handleGET);

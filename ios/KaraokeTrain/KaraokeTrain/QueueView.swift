@@ -235,6 +235,7 @@ struct QueueItemRow: View {
                 }
             }
             .padding(.leading, 8)
+            .disabled(ServerAccess.credential()?.role == "guest")
         }
         .padding(12)
         .background(Color.white.opacity(0.05))

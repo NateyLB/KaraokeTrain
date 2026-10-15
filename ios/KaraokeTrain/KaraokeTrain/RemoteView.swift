@@ -33,9 +33,9 @@ struct RemoteView: View {
                     SongBrowserView(partyViewModel: partyViewModel, defaultCatalogOpen: false, heading: "")
                         .frame(height: 340)
                     VStack(spacing: 20) {
-                        controls
+                        if ServerAccess.credential()?.role != "guest" { controls }
                         Divider().overlay(.white.opacity(0.1))
-                        mixingControls
+                        if ServerAccess.credential()?.role != "guest" { mixingControls }
                     }
                     .padding(20).background(.white.opacity(0.04))
                     .clipShape(RoundedRectangle(cornerRadius: 16))

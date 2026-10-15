@@ -1,3 +1,4 @@
+import { withAccess } from '../../../../lib/access/server.js';
 import { NextResponse } from 'next/server';
 import { songProcessing } from '../../../../lib/processing/index';
 import { isValidVideoId } from '../../../../lib/http/validators';
@@ -5,7 +6,7 @@ import { checkRateLimit, getClientIp } from '../../../../lib/http/rateLimiter';
 
 export const maxDuration = 300;
 
-export async function POST(request) {
+async function handlePOST(request) {
   // Rate limit: max 5 separation requests per minute per IP
   const clientIp = getClientIp(request);
   const rateCheck = checkRateLimit(`separate:${clientIp}`, { maxRequests: 5, windowMs: 60000 });
@@ -29,3 +30,5 @@ export async function POST(request) {
     return NextResponse.json({ error: error.status === 429 ? error.message : 'Could not start processing. Please try again.' }, { status: error.status || 500 });
   }
 }
+
+export const POST = withAccess(['owner', 'host'], handlePOST);

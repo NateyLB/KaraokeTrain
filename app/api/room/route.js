@@ -1,9 +1,10 @@
+import { withAccess } from '../../../lib/access/server.js';
 import { fetchLyrics } from '../../../lib/lyrics/candidates';
 import { checkRateLimit, getClientIp } from '../../../lib/http/rateLimiter';
 
 // cleanMetadata removed - handled inside fetchLyrics
 
-export async function GET(request) {
+async function handleGET(request) {
   // Rate limit: max 30 lyrics lookups per minute per IP
   const clientIp = getClientIp(request);
   const rateCheck = checkRateLimit(`room:${clientIp}`, { maxRequests: 30, windowMs: 60000 });
@@ -29,3 +30,5 @@ export async function GET(request) {
     return Response.json({ lyrics: null }, { status: 200 }); // Fail gracefully, don't expose internals
   }
 }
+
+export const GET = withAccess(['owner', 'host'], handleGET);

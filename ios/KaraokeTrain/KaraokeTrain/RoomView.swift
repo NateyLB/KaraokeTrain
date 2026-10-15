@@ -20,6 +20,7 @@ struct RoomView: View {
     @State private var isControlsVisible = true
     @State private var isMicExpanded = false
     @State private var isInfoOpen = false
+    @State private var showInvitation = false
 
     // Web app color palette
     let bgDark = Color(red: 10/255, green: 5/255, blue: 20/255)
@@ -76,8 +77,8 @@ struct RoomView: View {
                                 .foregroundColor(.white)
                                 .bold()
                         }
-                        Text("Join: \(playerViewModel.serverURL)/remote/\(partyViewModel.roomCode)")
-                            .font(.caption2).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
+                        Button("Invite guests") { showInvitation = true }
+                            .font(.caption2)
                         }
                     }
 
@@ -85,6 +86,9 @@ struct RoomView: View {
 
                     // Top Right Icons (Overlay Controls)
                         HStack(spacing: 8) {
+                            Button { showInvitation = true } label: {
+                                Image(systemName: "person.badge.plus").frame(width: 36, height: 36)
+                            }.accessibilityLabel("Invite guests")
                             if showsPlayback || recording.phase != .idle {
                             Button { showRecording.toggle(); isMicExpanded = false } label: {
                                 Image(systemName: recording.phase == .recording ? "stop.circle.fill" : "record.circle")
@@ -195,7 +199,7 @@ struct RoomView: View {
                                 if !hideVideo {
                                     VStack {
                                         Spacer()
-                                        ZStack {
+        ZStack {
                                             YouTubePlayerView(videoId: currentSong.videoId,
                                                               isPlaying: playerViewModel.isPlaying && !playerViewModel.isBuffering,
                                                               currentTime: playerViewModel.currentSongTime,
@@ -391,6 +395,7 @@ struct RoomView: View {
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)) { _ in
             if playerViewModel.isProcessing { playerViewModel.cancelProcessing() }
         }
+        .sheet(isPresented: $showInvitation) { RoomInvitationView(roomID: partyViewModel.roomCode) }
         .fullScreenCover(isPresented: $showSearch, onDismiss: { DeviceOrientation.request(roomOrientation) }) {
             SearchView(partyViewModel: partyViewModel, onDismiss: {
                 showSearch = false

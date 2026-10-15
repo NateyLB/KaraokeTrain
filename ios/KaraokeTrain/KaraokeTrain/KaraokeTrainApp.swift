@@ -95,7 +95,7 @@ struct KaraokeTrainApp: App {
 
     var body: some Scene {
         WindowGroup {
-            HomeView()
+            ServerConnectionView()
         }
     }
 }

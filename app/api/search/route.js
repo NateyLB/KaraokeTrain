@@ -1,7 +1,8 @@
+import { withAccess } from '../../../lib/access/server.js';
 import { searchYouTube } from '../../../lib/search/youtube';
 import { checkRateLimit, getClientIp } from '../../../lib/http/rateLimiter';
 
-export async function GET(request) {
+async function handleGET(request) {
   const { searchParams } = new URL(request.url);
   const query = searchParams.get('q');
 
@@ -27,3 +28,5 @@ export async function GET(request) {
     return Response.json({ error: 'Search failed. Please try again.' }, { status: 500 });
   }
 }
+
+export const GET = withAccess(['owner', 'host', 'guest'], handleGET);
