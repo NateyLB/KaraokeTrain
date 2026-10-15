@@ -2,6 +2,7 @@
 import copy
 import unicodedata
 from qwen_transcription import group_words
+from sequence_alignment import monotonic_matches
 
 
 def normalized(text):
@@ -59,29 +60,15 @@ def refine_timing(transcript, reference, audio=None, sample_rate=16000):
     # A text-only matcher can choose the wrong copy of a repeated chorus, then
     # lose anchors when we reject its distant timestamps. Score time proximity
     # DURING monotonic sequence alignment rather than checking it afterward.
-    rows = [[0.] * (len(actual)+1) for _ in range(len(words)+1)]
-    directions = [bytearray(len(actual)+1) for _ in range(len(words)+1)]
-    for i, word in enumerate(words,1):
-        for j, evidence in enumerate(actual,1):
-            above, left = rows[i-1][j], rows[i][j-1]
-            rows[i][j], directions[i][j] = (above,1) if above >= left else (left,2)
-            distance = abs(word['start']-evidence['start'])
-            minimum_confidence = .3 if word['end']-word['start'] <= .021 else .55
-            if (normalized(word['word']) == normalized(evidence['word']) and distance <= 2.5 and
-                    evidence.get('probability',0) >= minimum_confidence):
-                score = rows[i-1][j-1] + 1 + evidence['probability']*.2 - distance*.12
-                if score > rows[i][j]:
-                    rows[i][j], directions[i][j] = score,3
-    anchors = {}
-    i,j = len(words),len(actual)
-    while i and j:
-        if directions[i][j] == 3:
-            anchors[i-1] = actual[j-1]
-            i,j = i-1,j-1
-        elif directions[i][j] == 1:
-            i -= 1
-        else:
-            j -= 1
+    def score(i, j):
+        word, evidence = words[i], actual[j]
+        distance = abs(word['start'] - evidence['start'])
+        minimum_confidence = .3 if word['end'] - word['start'] <= .021 else .55
+        if distance <= 2.5 and evidence.get('probability', 0) >= minimum_confidence:
+            return 1 + evidence['probability'] * .2 - distance * .12
+        return None
+    anchors = {i: actual[j] for i, j in monotonic_matches(
+        [normalized(word['word']) for word in words], [normalized(word['word']) for word in actual], score)}
     coverage = len(anchors) / max(1, len(words))
     stats = {'version': 1, 'backend': 'whisper-large-v3-turbo', 'matchedWords': len(anchors),
              'coverage': round(coverage, 3), 'accepted': coverage >= .5 and len(anchors) >= 8}

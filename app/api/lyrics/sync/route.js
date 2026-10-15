@@ -54,6 +54,7 @@ export async function POST(request) {
         report = { runId: body.runId, action: plan.action, reason: plan.reason, check: result.cacheTiming,
           previousSource: existingMetadata.source, provider: result.transcription?.provider,
           timingAccepted: result.transcription?.timingValidation?.accepted, checkedAt: new Date().toISOString() };
+        if (body.analyzeOnly) return { maintenance: { ...report, analyzedOnly: true } };
         if (!plan.result) return { maintenance: report };
         published = plan.result;
         if (metadataHash(await checkCache(jobId)) !== body.expectedMetadataHash) {

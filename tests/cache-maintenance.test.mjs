@@ -44,8 +44,10 @@ test('Whisper-only and missing results upgrade through independent Qwen evidence
 test('maintenance requests require a backup hash and safe run identity; normal repair is unchanged', () => {
   const body = { mode: 'refresh-cache', runId: '2026-10-15-run', expectedMetadataHash: metadataHash(metadata) };
   assert.equal(validateMaintenance(body), true);
+  assert.equal(validateMaintenance({ ...body, analyzeOnly: true }), true);
   assert.equal(validateMaintenance({}), false);
-  for (const patch of [{ runId: '../invalid' }, { runId: 123 }, { expectedMetadataHash: '' }, { mode: 'other' }]) {
+  assert.throws(() => validateMaintenance({ analyzeOnly: true }), { status: 400 });
+  for (const patch of [{ runId: '../invalid' }, { runId: 123 }, { expectedMetadataHash: '' }, { mode: 'other' }, { analyzeOnly: 'true' }]) {
     assert.throws(() => validateMaintenance({ ...body, ...patch }), { status: 400 });
   }
   assert.notEqual(metadataHash(metadata), metadataHash({ ...metadata, lyrics: [] }));

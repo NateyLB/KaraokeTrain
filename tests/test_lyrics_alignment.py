@@ -2,7 +2,7 @@ import sys
 import unittest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'lib' / 'lyrics'))
-from lyrics_alignment import align_lyrics, fallback, verify_cached_timing
+from lyrics_alignment import align_lyrics, evaluate, fallback, verify_cached_timing
 import copy
 
 LINES = ['Copper skies above the river', 'Carry every lantern safely home', 'Morning opens windows for the travelers', 'We will meet beside the stone']
@@ -19,6 +19,14 @@ def transcript(lines=LINES, starts=None):
     return {'duration':1000,'segments':segments}
 
 class AlignmentTests(unittest.TestCase):
+    def test_repeated_lyrics_are_not_rejected_by_a_greedy_chorus_match(self):
+        reference = 'river lantern river copper river copper home copper home home copper home lantern lantern river river home river home lantern river river home home'
+        actual = 'lantern river copper copper copper home home lantern lantern traveler traveler river lantern river home home'
+        stats, *_ = evaluate(candidate([reference]), fallback(transcript([actual], [10])))
+        self.assertTrue(stats['accepted'])
+        self.assertEqual(stats['matchedTokens'], 14)
+        self.assertEqual(stats['transcriptCoverage'], .875)
+
     def test_cached_timing_is_verified_against_qwen_without_rewriting_text(self):
         data = {**transcript(), 'provider': 'qwen', 'independent': True}
         saved = fallback(data)

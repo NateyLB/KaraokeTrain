@@ -1,9 +1,9 @@
 """Pure validation/alignment; studio timestamps never authorize display timing."""
-import difflib
 import math
 import unicodedata
+from sequence_alignment import monotonic_matches
 
-ENGINE_VERSION = 3
+ENGINE_VERSION = 4
 
 
 def units(text):
@@ -47,18 +47,15 @@ def evaluate(candidate, transcript_lines):
     lines = [line for line in candidate.get('lines', []) if line.get('text', '').strip()]
     reference, ref_owners, ref_words = flatten(lines)
     actual, actual_owners, actual_words = flatten(transcript_lines, transcript=True)
-    matcher = difflib.SequenceMatcher(None, reference, actual, autojunk=False)
     anchors = {}
     matched_tokens = []
-    for block in matcher.get_matching_blocks():
-        for offset in range(block.size):
-            ref_idx, actual_idx = block.a + offset, block.b + offset
-            anchors.setdefault(ref_owners[ref_idx], []).append(actual_words[actual_owners[actual_idx]])
-            matched_tokens.append(reference[ref_idx])
+    for ref_idx, actual_idx in monotonic_matches(reference, actual):
+        anchors.setdefault(ref_owners[ref_idx], []).append(actual_words[actual_owners[actual_idx]])
+        matched_tokens.append(reference[ref_idx])
     matched = len(matched_tokens)
     reference_coverage = matched / max(1, len(reference))
     transcript_coverage = matched / max(1, len(actual))
-    ratio = matcher.ratio()
+    ratio = 2 * matched / max(1, len(reference) + len(actual))
     accepted = (candidate.get('exactMatch') is True and matched >= 8 and len(set(matched_tokens)) >= 4 and
                 reference_coverage >= .40 and transcript_coverage >= .50 and ratio >= .52)
     diagnostics = {'id': candidate.get('id'), 'trackName': candidate.get('trackName'),
@@ -74,9 +71,15 @@ def verify_cached_timing(lines, transcript):
     timed_lines = [{**line, 'words': line.get('words') or []} for line in lines]
     old_tokens, old_owners, old_words = flatten(timed_lines, transcript=True)
     new_tokens, new_owners, new_words = flatten(fallback(transcript), transcript=True)
-    pairs = set()
-    for block in difflib.SequenceMatcher(None, old_tokens, new_tokens, autojunk=False).get_matching_blocks():
-        pairs.update((old_owners[block.a + offset], new_owners[block.b + offset]) for offset in range(block.size))
+    # Time only breaks ties between equally strong text matches. Its total bonus
+    # is less than one token, so old timestamps cannot outweigh audio/text evidence.
+    bonus = 1 / (max(len(old_tokens), len(new_tokens)) + 1)
+    def score(old_idx, new_idx):
+        old, new = old_words[old_owners[old_idx]], new_words[new_owners[new_idx]]
+        start = old.get('start')
+        return 1 + bonus / (1 + abs(start - new['start'])) if isinstance(start, (int, float)) and math.isfinite(start) else 1
+    pairs = {(old_owners[old_idx], new_owners[new_idx])
+             for old_idx, new_idx in monotonic_matches(old_tokens, new_tokens, score)}
     starts, ends, matched = [], [], set()
     invalid = sum(not (isinstance(word.get('start'), (int, float)) and isinstance(word.get('end'), (int, float)) and
         math.isfinite(word['start']) and math.isfinite(word['end']) and 0 <= word['start'] < word['end'] <= transcript['duration'])

@@ -8,12 +8,12 @@ import { metadataHash } from '../lib/lyrics/cacheMaintenance.js';
 import { sanitizeForLog } from '../lib/http/validators.js';
 
 const { values } = parseArgs({ options: {
-  prepare: { type: 'boolean', default: false }, run: { type: 'string' },
+  prepare: { type: 'boolean', default: false }, analyze: { type: 'boolean', default: false }, run: { type: 'string' },
   server: { type: 'string', default: 'http://localhost:3000' }, limit: { type: 'string' },
 } });
 const root = fileURLToPath(new URL('../', import.meta.url));
 if (values.prepare) {
-  if (values.run || values.limit) throw new Error('--prepare creates a fresh backup; do not combine it with --run or --limit.');
+  if (values.run || values.limit || values.analyze) throw new Error('--prepare creates a fresh backup; do not combine it with --run, --analyze or --limit.');
   const catalog = await getCachedCatalog();
   const directory = path.join(root, 'uploads', '.lyric-refresh', new Date().toISOString().replace(/[:.]/g, '-'));
   await fs.mkdir(path.dirname(directory), { recursive: true });
@@ -78,6 +78,7 @@ async function checkpoint() {
   journal.updatedAt = new Date().toISOString();
   const entries = Object.values(journal.entries);
   journal.counts = { done: entries.filter(row => row.status === 'done').length,
+    analyzed: entries.filter(row => row.status === 'analyzed').length,
     review: entries.filter(row => row.status === 'review').length, failed: entries.filter(row => row.status === 'failed').length,
     total: inventory.length };
   const temporary = `${journalPath}.${process.pid}.tmp`;
@@ -92,6 +93,7 @@ try {
   await checkpoint();
   for (const song of [...inventory].sort((a, b) => priority(a) - priority(b))) {
     if (journal.entries[song.videoId]?.status === 'done') continue;
+    if (values.analyze && journal.entries[song.videoId]?.status === 'analyzed') continue;
     if (stopping || attempted >= limit) break;
     try { await fs.access(path.join(run, 'STOP')); stopping = true; break; } catch (error) { if (error.code !== 'ENOENT') throw error; }
     attempted++;
@@ -110,7 +112,8 @@ try {
         for (let attempt = 0; ; attempt++) {
           const response = await fetch(new URL('/api/lyrics/sync', values.server), {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ jobId: song.videoId, mode: 'refresh-cache', runId, expectedMetadataHash: metadataHash(before) }),
+            body: JSON.stringify({ jobId: song.videoId, mode: 'refresh-cache', runId,
+              analyzeOnly: values.analyze, expectedMetadataHash: metadataHash(before) }),
             signal: AbortSignal.timeout(35 * 60 * 1000),
           });
           const data = await response.json();
@@ -122,8 +125,9 @@ try {
         }
       }
       entry.report = report;
-      if (report.action === 'review-required') {
-        entry.status = 'review';
+      if (values.analyze || report.action === 'review-required') {
+        if (values.analyze && !report.analyzedOnly) throw new Error('The server did not acknowledge analysis-only mode.');
+        entry.status = values.analyze ? 'analyzed' : 'review';
         const candidate = path.join(root, 'uploads', song.videoId, 'transcription.json');
         await fs.copyFile(candidate, path.join(run, song.videoId, 'transcription.candidate.json'));
       } else {
@@ -147,14 +151,15 @@ try {
   }
   const entries = Object.values(journal.entries);
   const counts = { done: entries.filter(row => row.status === 'done').length,
+    analyzed: entries.filter(row => row.status === 'analyzed').length,
     review: entries.filter(row => row.status === 'review').length, failed: entries.filter(row => row.status === 'failed').length,
     total: inventory.length };
   journal.counts = counts;
-  journal.status = counts.done === inventory.length ? 'complete' : attempted >= limit || stopping ? 'paused' : 'needs-review';
+  journal.status = counts.done === inventory.length ? 'complete' : attempted >= limit || stopping ? 'paused' : values.analyze ? 'analyzed' : 'needs-review';
   await checkpoint();
   const rows = inventory.map(song => {
     const entry = journal.entries[song.videoId];
-    return `| ${song.title.replaceAll('|', '\\|')} | ${song.videoId} | ${entry?.status || 'pending'} | ${entry?.report?.action || entry?.error || ''} |`;
+    return `| ${song.title.replaceAll('|', '\\|')} | ${song.videoId} | ${entry?.status || 'pending'} | ${entry?.report?.reason || entry?.report?.action || entry?.error || ''} |`;
   });
   await fs.writeFile(path.join(run, 'REPORT.md'), `# Cached lyrics refresh\n\nRun: ${runId}\n\n${JSON.stringify(counts)}\n\n| Title | Video ID | Status | Result |\n| --- | --- | --- | --- |\n${rows.join('\n')}\n`);
   console.log(JSON.stringify({ run, status: journal.status, ...counts }));
