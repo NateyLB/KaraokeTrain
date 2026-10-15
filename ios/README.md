@@ -10,6 +10,8 @@ The SwiftUI app includes home, host/remote, catalog/search/DJ/voice search, queu
 
 YouTube's play/pause controls also control the separated audio and lyric clock. Native playback commands carry revisions so delayed video events cannot override a newer pause; buffering and transient seek events do not become user playback requests. The video stays muted and follows the audio clock.
 
+Saved-song lyric revisions are opaque tokens. Native room decoding accepts current string tokens such as `3:1791960133232` and legacy JSON numbers, including their appearance in queue/history entries. This fixes the cached-song “incorrect format” rejection caused by decoding current revisions as `Double`; existing audio and metadata can be reused.
+
 Lyrics use authoritative word timing, continuous fill across glyph widths and wrapped words, stable layout, source labels, countdowns, seek snapping and Reduce Motion. Repaired lyrics retain the selected language. Revisions from another client refresh the lyrics without restarting audio.
 
 ## Microphone and recording

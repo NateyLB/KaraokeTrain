@@ -74,12 +74,15 @@ test('job status changes notify connected listeners and allow cleanup', () => {
 test('party responses include ready cache status and saved lyrics for immediate loading', () => {
   const id = 'CACHE000002';
   const lyrics = [{ time: 1, text: 'Saved lyrics' }];
-  jobQueue.set(id, { status: 'ready', cached: true, lyrics });
+  const lyricsRevision = '3:1791960133232';
+  jobQueue.set(id, { status: 'ready', cached: true, lyrics, lyricsRevision });
   const result = partyPayload({ currentSong: { jobId: id }, queue: [{ jobId: id }, { jobId: 'unknown' }] });
   assert.equal(result.currentSong.jobStatus.status, 'ready');
   assert.equal(result.currentSong.jobStatus.cached, true);
+  assert.equal(result.currentSong.jobStatus.lyricsRevision, lyricsRevision);
   assert.deepEqual(result.currentSong.jobStatus.lyrics, lyrics);
   assert.equal(result.queue[0].jobStatus.status, 'ready');
+  assert.equal(result.queue[0].jobStatus.lyricsRevision, lyricsRevision);
   assert.equal(result.queue[0].jobStatus.lyrics, undefined);
   assert.equal(result.queue[1].jobStatus.status, 'pending');
 });

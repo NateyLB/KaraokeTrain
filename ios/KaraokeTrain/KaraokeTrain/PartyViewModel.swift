@@ -1,13 +1,35 @@
 import Foundation
 import Combine
 
+/// Revision tokens are opaque: current servers send "engine:timestamp" strings,
+/// while older cached metadata may contain JSON numbers.
+nonisolated struct LyricsRevision: Codable, Equatable {
+    let rawValue: String
+
+    init(from decoder: Decoder) throws {
+        let value = try decoder.singleValueContainer()
+        if let text = try? value.decode(String.self) {
+            rawValue = text
+        } else if let integer = try? value.decode(Int64.self) {
+            rawValue = String(integer)
+        } else {
+            rawValue = String(try value.decode(Double.self))
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var value = encoder.singleValueContainer()
+        try value.encode(rawValue)
+    }
+}
+
 nonisolated struct JobStatus: Codable {
     let status: String
     let progress: Double?
     let message: String?
     let error: String?
     let cached: Bool?
-    let lyricsRevision: Double?
+    let lyricsRevision: LyricsRevision?
 }
 
 /// Represents a song in the queue as returned by the Next.js API
