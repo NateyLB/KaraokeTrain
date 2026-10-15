@@ -1,10 +1,10 @@
-import { useRef, useEffect, useCallback, useMemo } from 'react';
+import { useRef, useEffect, useCallback } from 'react';
 import useKaraokeStore from '../store/useKaraokeStore';
 import { selectedLyrics } from '../lib/lyrics/timeline';
 import { MultiplexGraph } from '../lib/audio/MultiplexGraph';
 import { getAudioRuntime } from '../lib/audio/runtime';
 import { playMedia as safePlay, pauseMedia as safePause } from '../lib/audio/media';
-import { PartyClient } from '../lib/party/PartyClient';
+import { usePartyActions } from './usePartyActions';
 
 /**
  * Owns all audio playback state that is imperative / ref-based:
@@ -21,11 +21,10 @@ export function useAudioPlayback(roomId) {
   const audioRefs = useRef({ multiplex: null });
   const ytPlayerRef = useRef(null);
   const timeUpdateInterval = useRef(null);
-  const isPlayingRef = useRef(false);
   const advanceInFlightRef = useRef(false);
 
   const graphRef = useRef(null);
-  const client = useMemo(() => new PartyClient(roomId), [roomId]);
+  const { nextSong, previousSong } = usePartyActions(roomId);
 
   const wireWebAudio = useCallback(() => {
     const audio = audioRefs.current.multiplex;
@@ -73,7 +72,6 @@ export function useAudioPlayback(roomId) {
       }
       stopTimeUpdates();
       setIsPlaying(false);
-      isPlayingRef.current = false;
     } else {
       // Initialize/resume Web Audio synchronously inside the user gesture
       wireWebAudio();
@@ -84,7 +82,6 @@ export function useAudioPlayback(roomId) {
       }
 
       setIsPlaying(true);
-      isPlayingRef.current = true;
 
       // Always play the audio element synchronously to unlock it on mobile browsers.
       // If YouTube buffers, the buffering callback will pause it temporarily.
@@ -98,19 +95,15 @@ export function useAudioPlayback(roomId) {
     }
   }, [startTimeUpdates, stopTimeUpdates, wireWebAudio]);
 
-  const advanceSong = useCallback(async action => {
+  const advanceSong = useCallback(async operation => {
     if (advanceInFlightRef.current) return;
     advanceInFlightRef.current = true;
     try {
-      const party = await client.send(action, { expectedCurrentQueueId: useKaraokeStore.getState().partyState?.currentSong?.queueId ?? null });
-      useKaraokeStore.getState().setPartyState(party);
-    } catch (error) {
-      if (error.party?.id === roomId) useKaraokeStore.getState().setPartyState(error.party);
-      useKaraokeStore.getState().setToast(error.message);
+      await operation();
     } finally { advanceInFlightRef.current = false; }
-  }, [client, roomId]);
-  const handleNextSong = useCallback(() => advanceSong('next'), [advanceSong]);
-  const handlePreviousSong = useCallback(() => advanceSong('previous'), [advanceSong]);
+  }, []);
+  const handleNextSong = useCallback(() => advanceSong(nextSong), [advanceSong, nextSong]);
+  const handlePreviousSong = useCallback(() => advanceSong(previousSong), [advanceSong, previousSong]);
 
   const handleAlignStart = useCallback(() => {
     const { parsedLyrics, selectedVersionIdx, currentSongTime, setLyricsOffset } =
@@ -141,7 +134,6 @@ export function useAudioPlayback(roomId) {
         window.__karaokeAudioCtx.resume().catch(() => {});
       }
       setIsPlaying(true);
-      isPlayingRef.current = true;
       if (audioRefs.current['multiplex']?.paused) {
         safePlay(audioRefs.current['multiplex']);
       }
@@ -149,7 +141,6 @@ export function useAudioPlayback(roomId) {
     } else if (event.data === 2) {
       // PAUSED
       setIsPlaying(false);
-      isPlayingRef.current = false;
       stopTimeUpdates();
       if (audioRefs.current['multiplex'] && !audioRefs.current['multiplex'].paused) {
         safePause(audioRefs.current['multiplex']);

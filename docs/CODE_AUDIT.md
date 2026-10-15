@@ -57,3 +57,18 @@ The supported webpack builder is selected for development and production. Turbop
 The phone remote now reports connecting/reconnecting instead of always claiming a connection. Room-code entry matches the four-character server contract; search and catalog controls support labels and keyboard interaction. [Shared backend exploration](SHARED_BACKEND_PLAN.md) records the current contract and proposed migration stages; architectural choices remain pending owner approval.
 
 Follow-up verification: 59 JavaScript and 22 Python checks pass (81 total); lint, production build, `git diff --check`, and the production dependency audit pass. Live API checks in isolated room QAPI verified stale remove/play rejection, current-song guards under simultaneous Next requests, 409 snapshots and invalid input. Browser room entry, connection status and remote queue controls were checked. Existing user rooms were not modified by these API checks.
+
+## October 15 continuation
+
+Ordinary usage was available when the scheduled continuation started; no reset credits were used. The existing local Xcode signing/privacy edits and credentials were preserved.
+
+- Fixed lost host/phone settings: the old two-second interaction guard discarded remote updates while marking their revisions consumed. A room-owned `SettingsSynchronizer` now sends only locally changed fields, serializes requests, protects pending edits, and then applies the newest server snapshot. Clients with the same role can receive each other's changes. Server updates do not echo back; failed patches remain available for the next interaction without an automatic retry loop. Disposal removes subscriptions, cancels debounce and aborts requests.
+- Queue actions now cancel on room changes/unmount and ignore late responses. Host Next/Back reuse the same action/error handling as the remote. Removed the unused playback-state ref. Providing a cancellation signal no longer disables the party client's 15-second deadline.
+- Remote mixing toggles expose their pressed state, sliders have accessible labels, and collapsed catalog contents are excluded from keyboard and screen-reader navigation.
+- Reviewed processing admission, private audio streaming/cancellation, storage paths, API validation and tracked secret filenames. No additional unused dependency or scratch file was confirmed for deletion.
+
+Verification: 74 JavaScript and 22 Python checks pass (96 total), including eight new synchronization/cancellation regressions. ESLint and the production webpack build pass. All 16 production trace manifests exclude environments, model/runtime data and credential files. The production dependency audit reports zero findings. Native source was not changed during this continuation.
+
+Browser checks used isolated room AR15: two phone controllers retained near-simultaneous changes, cached Angel of Mine audio played, a phone pause immediately after a host volume edit stopped the audio, host Next cleared the current selection, and phone Back restored it. The 103-song catalog and accessible collapsed state were verified. The test song is paused with microphone/recording disabled; temporary browser tabs were closed. Preview: `/private/tmp/karaoketrain-audit-oct15-remote.png`.
+
+A catalog refresh stalled in the existing development process even though a fresh read-only GCS process loaded all 103 songs. Refreshing only its cached storage client restored API and browser catalog reads without restarting the room server. The diagnostic source edit was fully reverted and the room was preserved. The underlying stall was not isolated; recurrence needs further storage-client tracing. This is a recovered runtime incident, not a permanent storage fix or a credential change.

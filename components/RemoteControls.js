@@ -62,13 +62,13 @@ export default function RemoteControls({ roomId }) {
                 
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                     {/* Video Toggle */}
-                    <button onClick={() => setIsVideoVisible(!isVideoVisible)} style={{ padding: '0.4rem 0.8rem', borderRadius: '99px', fontSize: '0.8rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', background: isVideoVisible ? 'var(--primary-accent)' : 'var(--glass-bg)', border: 'none', color: 'white' }}>
+                    <button aria-pressed={isVideoVisible} onClick={() => setIsVideoVisible(!isVideoVisible)} style={{ padding: '0.4rem 0.8rem', borderRadius: '99px', fontSize: '0.8rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', background: isVideoVisible ? 'var(--primary-accent)' : 'var(--glass-bg)', border: 'none', color: 'white' }}>
                         <Video size={16} />
                         {isVideoVisible ? 'Hide Video' : 'Show Video'}
                     </button>
                     
                     {/* Vocals Toggle */}
-                    <button onClick={() => setVocalsEnabled(!vocalsEnabled)} style={{ padding: '0.4rem 0.8rem', borderRadius: '99px', fontSize: '0.8rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', background: vocalsEnabled ? 'var(--primary-accent)' : 'var(--glass-bg)', border: 'none', color: 'white' }}>
+                    <button aria-pressed={vocalsEnabled} onClick={() => setVocalsEnabled(!vocalsEnabled)} style={{ padding: '0.4rem 0.8rem', borderRadius: '99px', fontSize: '0.8rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', background: vocalsEnabled ? 'var(--primary-accent)' : 'var(--glass-bg)', border: 'none', color: 'white' }}>
                         {vocalsEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
                         {vocalsEnabled ? 'Vocals On' : 'Vocals Off'}
                     </button>
@@ -77,23 +77,23 @@ export default function RemoteControls({ roomId }) {
 
             {/* Sliders */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <button onClick={() => setMicEnabled(!micEnabled)} style={{ padding: '0.4rem 0.8rem', borderRadius: '99px', fontSize: '0.8rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', background: micEnabled ? 'var(--secondary-accent)' : 'var(--glass-bg)', border: 'none', color: micEnabled ? '#1a1a1a' : 'var(--text-muted)' }}>
+              <button aria-pressed={micEnabled} onClick={() => setMicEnabled(!micEnabled)} style={{ padding: '0.4rem 0.8rem', borderRadius: '99px', fontSize: '0.8rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', background: micEnabled ? 'var(--secondary-accent)' : 'var(--glass-bg)', border: 'none', color: micEnabled ? '#1a1a1a' : 'var(--text-muted)' }}>
                {micEnabled ? <Mic size={16} /> : <MicOff size={16} />}
                {micEnabled ? 'Mic On' : 'Mic Off'}
               </button>
-              <input type="range" min={0} max={1} step={0.01} value={micVolume} onChange={(e) => setMicVolume(parseFloat(e.target.value))} disabled={!micEnabled} style={{ flex: 1, accentColor: 'var(--secondary-accent)', cursor: micEnabled ? 'pointer' : 'not-allowed', opacity: micEnabled ? 1 : 0.4 }} />
+              <input aria-label="Microphone volume" type="range" min={0} max={1} step={0.01} value={micVolume} onChange={(e) => setMicVolume(parseFloat(e.target.value))} disabled={!micEnabled} style={{ flex: 1, accentColor: 'var(--secondary-accent)', cursor: micEnabled ? 'pointer' : 'not-allowed', opacity: micEnabled ? 1 : 0.4 }} />
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
               <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', width: '20px', textAlign: 'center' }}>V</span>
-              <input type="range" min={0} max={1} step={0.01} value={vocalsVolume} onChange={(e) => setVocalsVolume(parseFloat(e.target.value))} disabled={!vocalsEnabled} style={{ flex: 1, accentColor: 'var(--secondary-accent)', cursor: vocalsEnabled ? 'pointer' : 'not-allowed', opacity: vocalsEnabled ? 1 : 0.4 }} />
+              <input aria-label="Vocals volume" type="range" min={0} max={1} step={0.01} value={vocalsVolume} onChange={(e) => setVocalsVolume(parseFloat(e.target.value))} disabled={!vocalsEnabled} style={{ flex: 1, accentColor: 'var(--secondary-accent)', cursor: vocalsEnabled ? 'pointer' : 'not-allowed', opacity: vocalsEnabled ? 1 : 0.4 }} />
             </div>
             
             {/* Mic Effects */}
             <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <button onClick={() => setEchoOn(!echoOn)} style={{ flex: 1, padding: '0.5rem', borderRadius: '0.5rem', background: echoOn ? 'rgba(139, 92, 246, 0.2)' : 'var(--glass-bg)', border: `1px solid ${echoOn ? 'var(--primary-accent)' : 'var(--glass-border)'}`, color: echoOn ? 'var(--primary-accent)' : 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}>
+              <button aria-pressed={echoOn} onClick={() => setEchoOn(!echoOn)} style={{ flex: 1, padding: '0.5rem', borderRadius: '0.5rem', background: echoOn ? 'rgba(139, 92, 246, 0.2)' : 'var(--glass-bg)', border: `1px solid ${echoOn ? 'var(--primary-accent)' : 'var(--glass-border)'}`, color: echoOn ? 'var(--primary-accent)' : 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}>
                 <Waves size={14} /> Echo
               </button>
-              <button onClick={() => setAutoTuneOn(!autoTuneOn)} style={{ flex: 1, padding: '0.5rem', borderRadius: '0.5rem', background: autoTuneOn ? 'rgba(236, 72, 153, 0.2)' : 'var(--glass-bg)', border: `1px solid ${autoTuneOn ? 'var(--secondary-accent)' : 'var(--glass-border)'}`, color: autoTuneOn ? 'var(--secondary-accent)' : 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}>
+              <button aria-pressed={autoTuneOn} onClick={() => setAutoTuneOn(!autoTuneOn)} style={{ flex: 1, padding: '0.5rem', borderRadius: '0.5rem', background: autoTuneOn ? 'rgba(236, 72, 153, 0.2)' : 'var(--glass-bg)', border: `1px solid ${autoTuneOn ? 'var(--secondary-accent)' : 'var(--glass-border)'}`, color: autoTuneOn ? 'var(--secondary-accent)' : 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}>
                 <Sparkles size={14} /> AutoTune
               </button>
             </div>

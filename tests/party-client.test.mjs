@@ -28,3 +28,27 @@ test('queue conflict errors carry the authoritative room snapshot for immediate 
     return true;
   });
 });
+
+test('a room request remains bounded by its deadline when a cancellation signal is supplied', async t => {
+  const deadline = new AbortController();
+  t.mock.method(AbortSignal, 'timeout', milliseconds => {
+    assert.equal(milliseconds, 15000);
+    return deadline.signal;
+  });
+  const client = new PartyClient('LTIM', (_, { signal }) => new Promise((_, reject) => {
+    signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+  }));
+  const pending = client.send('next', {}, { signal: new AbortController().signal });
+  deadline.abort(new DOMException('The room request timed out', 'TimeoutError'));
+  await assert.rejects(pending, { name: 'TimeoutError' });
+});
+
+test('queue additions forward room-lifetime cancellation', async () => {
+  const lifetime = new AbortController();
+  const client = new PartyClient('LTIM', (_, { signal }) => new Promise((_, reject) => {
+    signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+  }));
+  const pending = client.addSong({ videoId: 'abcdefghijk' }, { signal: lifetime.signal });
+  lifetime.abort();
+  await assert.rejects(pending, { name: 'AbortError' });
+});

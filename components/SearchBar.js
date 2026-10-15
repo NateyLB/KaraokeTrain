@@ -105,7 +105,7 @@ export default function SearchBar({ onSelect, defaultCatalogOpen = true }) {
               </span>
             </button>
             
-            <div style={{ 
+            <div aria-hidden={!isCatalogOpen} inert={!isCatalogOpen} style={{
               maxHeight: isCatalogOpen ? '300px' : '0px', 
               overflow: 'hidden', 
               transition: 'all 0.3s ease-in-out',
