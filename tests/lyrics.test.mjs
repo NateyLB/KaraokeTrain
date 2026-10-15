@@ -8,6 +8,8 @@ test('channel cleanup retains the exact song and artist', () => {
   assert.deepEqual(cleanForLyrics('AC-DC — Back in Black (Official Video)', 'Music Channel'), { cleanedTrack:'Back in Black', cleanedArtist:'AC-DC' });
   assert.deepEqual(cleanForLyrics('Spider-Man (Theme)', 'FooVEVO'), { cleanedTrack:'Spider-Man (Theme)', cleanedArtist:'Foo' });
   assert.deepEqual(cleanForLyrics('Artist - Song (Live at Wembley)', 'BBC'), { cleanedTrack:'Song', cleanedArtist:'Artist' });
+  assert.deepEqual(cleanForLyrics('Artist - Song (Official Video) (as featured in A Film)', 'Music Channel'),
+    { cleanedTrack:'Song', cleanedArtist:'Artist' });
   assert.equal(isExactLyricsMatch({trackName:'Song',artistName:'Different Artist'}, 'Song','Artist'), false);
   assert.equal(isExactLyricsMatch({trackName:'Song (Remix)',artistName:'Artist'},'Song','Artist'), false);
 });
