@@ -2,6 +2,8 @@
 
 The one-time continuation resumed successfully at 2:12 AM Pacific on October 14, 2026. No reset credits were used. Cleanup and audit results are in [CODE_AUDIT.md](CODE_AUDIT.md).
 
+October 15 lyrics maintenance is in progress at the owner's request: upgrade Whisper-only entries to Qwen and verify/re-align saved LRCLIB timing against independent Qwen audio evidence. All 103 cache entries have local rollback snapshots. The original two-song pilot exposed and fixed a NumPy JSON serialization failure in the timing pass; the replacement run rechecks those titles before continuing. Read [CACHE_LYRICS_REFRESH.md](CACHE_LYRICS_REFRESH.md) for the run directories, resumable commands and publication safeguards. Do not report the cache refresh complete until the journal accounts for every title and any held results are resolved.
+
 All existing uncommitted work and credentials remain preserved. Do not reset the checkout. Libraries have been moved into domain folders; read current imports instead of old root-level `lib` paths. Next.js is now 16.4.0 and uses its supported webpack builder because Turbopack traced runtime directories into local Python symlinks.
 
 October 15 native follow-up: cached-song loading rejected `lyricsRevision` strings because `JobStatus` expected `Double`. The decoder now keeps revisions as opaque tokens while accepting legacy numeric values. The original failure was reproduced from a real saved GCS revision; native contract regressions, Debug/Release iPhone builds, all 103 live catalog records and real cached audio streaming pass. Preserve the owner's Xcode signing/privacy edits when committing this fix. This metadata decoding issue is distinct from the earlier recovered catalog-client stall.

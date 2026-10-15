@@ -68,6 +68,42 @@ def evaluate(candidate, transcript_lines):
     return diagnostics, lines, ref_words, anchors
 
 
+def verify_cached_timing(lines, transcript):
+    """Check saved word intervals against independent Qwen audio evidence."""
+    missing = sum(bool(line.get('text', '').strip()) and not line.get('words') for line in lines)
+    timed_lines = [{**line, 'words': line.get('words') or []} for line in lines]
+    old_tokens, old_owners, old_words = flatten(timed_lines, transcript=True)
+    new_tokens, new_owners, new_words = flatten(fallback(transcript), transcript=True)
+    pairs = set()
+    for block in difflib.SequenceMatcher(None, old_tokens, new_tokens, autojunk=False).get_matching_blocks():
+        pairs.update((old_owners[block.a + offset], new_owners[block.b + offset]) for offset in range(block.size))
+    starts, ends, matched = [], [], set()
+    invalid = sum(not (isinstance(word.get('start'), (int, float)) and isinstance(word.get('end'), (int, float)) and
+        math.isfinite(word['start']) and math.isfinite(word['end']) and 0 <= word['start'] < word['end'] <= transcript['duration'])
+        for word in old_words)
+    for old_idx, new_idx in pairs:
+        old, new = old_words[old_idx], new_words[new_idx]
+        if isinstance(old.get('start'), (int, float)) and isinstance(old.get('end'), (int, float)):
+            if math.isfinite(old['start']) and math.isfinite(old['end']):
+                starts.append(abs(old['start'] - new['start']))
+                ends.append(abs(old['end'] - new['end']))
+                matched.add(old_idx)
+    def percentile(values, fraction):
+        return round(sorted(values)[min(len(values) - 1, int((len(values) - 1) * fraction))], 3) if values else None
+    coverage = len(matched) / max(1, len(old_words))
+    enough = (transcript.get('provider') == 'qwen' and transcript.get('independent') is True and
+              len(matched) >= 8 and coverage >= .75 and len(set(old_tokens)) >= 4)
+    stats = {'provider': transcript.get('provider'), 'matchedWords': len(matched), 'referenceWords': len(old_words),
+             'missingTimedLines': missing,
+             'coverage': round(coverage, 3), 'invalidIntervals': invalid,
+             'medianStartError': percentile(starts, .5), 'p90StartError': percentile(starts, .9),
+             'medianEndError': percentile(ends, .5), 'p90EndError': percentile(ends, .9)}
+    stats['aligned'] = bool(enough and not invalid and not missing and stats['medianStartError'] <= .25 and
+                            stats['p90StartError'] <= .7 and stats['p90EndError'] <= 1)
+    stats['reason'] = 'verified' if stats['aligned'] else 'timing_drift' if enough else 'insufficient_text_evidence'
+    return stats
+
+
 def aligned_lines(lines, words, anchors):
     output = []
     for line_idx, line in enumerate(lines):
@@ -139,6 +175,9 @@ def align_lyrics(candidates, transcript):
     accepted = [(candidate, result) for candidate, result in evaluations if result[0]['accepted']]
     base = {'lyricsEngineVersion': ENGINE_VERSION, 'validation': {'candidates': diagnostics,
             'independentTranscription': True, 'reason': 'no_exact_match' if not candidates else 'transcription_mismatch'}}
+    cached = next((candidate for candidate in candidates if candidate.get('cached')), None)
+    if cached:
+        base['cacheTiming'] = verify_cached_timing(cached['lines'], transcript)
     if not accepted:
         return {**base, 'source': fallback_source, 'lyrics': actual}
     candidate, result = max(accepted, key=lambda entry: entry[1][0]['score'])

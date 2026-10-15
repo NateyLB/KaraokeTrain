@@ -133,6 +133,6 @@ def refine_timing(transcript, reference, audio=None, sample_rate=16000):
     result['timingReference'] = reference
     result['timingValidation'] = {**stats, 'interpolatedWords': interpolated, 'sustainsExtended': extended,
         'onsetsRefined': sum(bool(w.get('onsetRefined')) for w in words),
-        'collapsedBefore': sum(w['end']-w['start'] <= .021 for s in transcript['segments'] for w in s['words']),
-        'collapsedAfter': sum(w['end']-w['start'] <= .021 for w in words)}
+        'collapsedBefore': sum(bool(w['end']-w['start'] <= .021) for s in transcript['segments'] for w in s['words']),
+        'collapsedAfter': sum(bool(w['end']-w['start'] <= .021) for w in words)}
     return result

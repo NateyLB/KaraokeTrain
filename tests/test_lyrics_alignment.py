@@ -2,7 +2,8 @@ import sys
 import unittest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'lib' / 'lyrics'))
-from lyrics_alignment import align_lyrics
+from lyrics_alignment import align_lyrics, fallback, verify_cached_timing
+import copy
 
 LINES = ['Copper skies above the river', 'Carry every lantern safely home', 'Morning opens windows for the travelers', 'We will meet beside the stone']
 
@@ -18,6 +19,29 @@ def transcript(lines=LINES, starts=None):
     return {'duration':1000,'segments':segments}
 
 class AlignmentTests(unittest.TestCase):
+    def test_cached_timing_is_verified_against_qwen_without_rewriting_text(self):
+        data = {**transcript(), 'provider': 'qwen', 'independent': True}
+        saved = fallback(data)
+        self.assertTrue(verify_cached_timing(saved, data)['aligned'])
+        cached = {**candidate(cached=True), 'lines': saved}
+        result = align_lyrics([cached], data)
+        self.assertTrue(result['cacheTiming']['aligned'])
+
+    def test_cached_drift_missing_intervals_and_text_mismatch_are_not_verified(self):
+        data = {**transcript(), 'provider': 'qwen', 'independent': True}
+        saved = fallback(data)
+        shifted = copy.deepcopy(saved)
+        for line in shifted:
+            for word in line['words']:
+                word['start'] += 4
+                word['end'] += 4
+        self.assertFalse(verify_cached_timing(shifted, data)['aligned'])
+        self.assertEqual(verify_cached_timing(shifted, data)['medianStartError'], 4)
+        saved[0]['words'] = None
+        self.assertFalse(verify_cached_timing(saved, data)['aligned'])
+        other = {**data, 'segments': transcript(['Unrelated words fly nowhere'] * 4)['segments']}
+        self.assertFalse(verify_cached_timing(fallback(data), other)['aligned'])
+
     def test_mismatch_with_studio_times_must_fall_back(self):
         result=align_lyrics([candidate()],transcript(['Apple engines orbit the moon','Purple bridges turn upside down','A silent radio follows clouds','People dance under emerald mountains']))
         self.assertEqual(result['source'],'whisper_fallback')

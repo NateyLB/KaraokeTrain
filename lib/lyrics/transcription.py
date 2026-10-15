@@ -49,16 +49,16 @@ def transcribe_audio(model, audio_path, source, on_progress=None, language=None)
     )
     timed = []
     for segment in segments:
-        words = [{'word': word.word.strip(), 'start': max(0, word.start), 'end': min(duration, word.end),
-                  'probability': word.probability}
+        words = [{'word': word.word.strip(), 'start': max(0, float(word.start)), 'end': min(duration, float(word.end)),
+                  'probability': float(word.probability)}
                  for word in (segment.words or []) if word.word.strip() and
                  math.isfinite(word.start) and math.isfinite(word.end) and word.end > word.start]
         if words and segment.text.strip() and segment.avg_logprob >= -1.2:
             timed.append({'start': words[0]['start'], 'end': words[-1]['end'], 'text': segment.text.strip(),
-                          'words': words, 'avgLogprob': segment.avg_logprob,
-                          'noSpeechProbability': segment.no_speech_prob})
+                          'words': words, 'avgLogprob': float(segment.avg_logprob),
+                          'noSpeechProbability': float(segment.no_speech_prob)})
         if on_progress:
             on_progress(min(100, int(segment.end / max(duration, 1) * 100)))
     return {'version': TRANSCRIPTION_VERSION, 'independent': True, 'language': info.language,
-            'languageProbability': info.language_probability, 'audioSource': source,
+            'languageProbability': float(info.language_probability), 'audioSource': source,
             'duration': duration, 'segments': timed, 'quality': quality(timed)}

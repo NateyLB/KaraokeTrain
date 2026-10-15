@@ -5,6 +5,19 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'lib'/'lyrics'))
 from timing_refinement import refine_timing, extend_sustained_words
 
 class TimingTests(unittest.TestCase):
+    def test_numpy_timing_diagnostics_can_be_saved_as_strict_json(self):
+        import json
+        import numpy as np
+        tokens = ['Copper', 'lanterns', 'shine', 'across', 'quiet', 'rivers', 'guiding', 'travelers', 'home']
+        words = [{'word': token, 'start': float(i), 'end': float(i) + .02} for i, token in enumerate(tokens)]
+        original = {'duration': 15, 'segments': [{'text': ' '.join(tokens), 'words': words}]}
+        reference = {'segments': [{'words': [{**word, 'start': np.float64(word['start']),
+            'end': np.float64(word['start'] + .7), 'probability': np.float64(.95)} for word in words]}]}
+        result = refine_timing(original, reference)
+        self.assertTrue(result['timingValidation']['accepted'])
+        self.assertIsInstance(result['timingValidation']['collapsedAfter'], int)
+        json.dumps(result, allow_nan=False)
+
     def test_corrects_collapsed_word_without_changing_transcription(self):
         tokens=['Copper','lanterns','shine','across','quiet','rivers','guiding','travelers','home']
         words=[{'word':token,'start':i,'end':i+.02} for i,token in enumerate(tokens)]
