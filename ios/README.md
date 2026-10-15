@@ -1,42 +1,48 @@
 # Native Swift continuation
 
-The web refactor is committed and pushed on `codex/web-refactor` (`1863c7b`). This native work continues on `codex/ios-continuation`, based on that refactor. The original `origin/codex/ios-port` (`b9aea10`) remains intact; only its `ios/` source was restored, without its repository restructuring or older backend.
+The web refactor is pushed on `codex/web-refactor` (`1863c7b`). Native work continues on `codex/ios-continuation`, based on that refactor. The original `origin/codex/ios-port` (`b9aea10`) remains intact; only its native source was restored, without its old repository restructuring or backend.
 
-## Current state
+## Processing and playback
 
-- Reused SwiftUI home, host/remote, search, queue and player screens, AVFoundation streaming/multiplex mixer and YouTube bridge.
-- Updated room decoding for the current web contract, unique queue IDs, cached status/revisions, catalog art and microphone settings. Stale queue actions now send entry identities and consume the API's 409 snapshot.
-- Native room synchronization now uses the same SSE endpoint as the web, with bounded framing, reconnection, cancellation and generation guards. Remote Next/Back mutate the authoritative queue directly.
-- Ported the current word-authoritative lyric timeline, sustained-word preview rules, instrumental countdowns, seek behavior and native-character spacing. Web and Swift consume the same fixture cases. Scrolling occurs on line changes/seeks, uses stable text layout, honors Reduce Motion, and avoids rebuilding unchanged rows. Audio time updates at 30 Hz. Word fill currently advances by character; continuous within-character gradient parity remains work.
-- Centralized server configuration. The simulator defaults to `http://localhost:3000`. For a phone, create ignored `KaraokeTrain/LocalDevelopment.xcconfig` and set `KARAOKE_SERVER_HOST` to the Mac's reachable LAN address. The web app must be running with `npm run dev`.
+The owner approved **Mac mini processing first**, reusing the current web API, with an iPhone benchmark before reconsidering on-device processing. Native rooms use the shared queue, job status, private GCS stream, and Qwen/LRCLIB lyric engine. Adding a queue entry starts processing on the server; the native player waits without starting a duplicate job. Cached audio streams through AVPlayer and the native multiplex mixer. New queue entries become ready and paused, matching the web host. Retries and lyric repair are explicit operations.
 
-The owner approved **Mac mini processing first, with an iPhone benchmark before reconsidering on-device processing**. Native hosts now use the same room API, server job-status polling, cached GCS audio and Qwen/LRCLIB lyric engine as the web. Adding a queue entry starts work on the server; the native player only waits for it, without a second processing request. Explicit failed-song retries use the shared start endpoint. Lyric repair uses the shared sync endpoint without restarting audio. Backgrounding stops local waiting while server work can continue. The earlier native job transport, local processing queue and embedded downloader-secret configuration were removed. No Core ML model is needed for normal playback or processing.
+The SwiftUI app includes home, host/remote, catalog/search/DJ/voice search, queue controls, video, lyrics, microphone, recording and help components. Room SSE supports reconnection, cancellation and bounded framing. Queue actions carry entry identities; automatic advance guards the song that actually ended. This is still a port under validation; no complete visual/device parity claim is made.
 
-This remains **incomplete 1:1 parity**. The normal app has one configurable web API address and does not contact the downloader directly. The earlier branch remains available as a historical source.
+Lyrics use authoritative word timing, continuous fill across glyph widths and wrapped words, stable layout, source labels, countdowns, seek snapping and Reduce Motion. Repaired lyrics retain the selected language. Revisions from another client refresh the lyrics without restarting audio.
 
-Native microphone monitoring/effects, recording/export, complete mixing/remote UI parity, authentication, real-device permissions/audio interruptions and full visual comparisons remain outstanding. The earlier port's model is not included in Git. Its `.cpuOnly` configuration is not evidence of accelerated iPhone performance.
+## Microphone and recording
 
-## Checks
+One owned AVAudioEngine serves microphone monitoring, pitch analysis, voice search and recording. Consumers hold independent leases; stopping search does not stop singing. Gain, delayed echo, nearest-chromatic-note pitch correction and optional system voice processing are implemented. Native AutoTune is chromatic correction, not a claim of matching the singer's intended melody. Permission requests have cancellation guards. Interruptions and disconnected audio routes stop capture safely and pause playback.
 
-On this Mac, Xcode 27 / Swift 6.4 built and launched the simulator app with signing disabled. Deterministic Swift checks passed for shared processing (including cached bypass, explicit retry/repair, failures and cancellation), overlap assembly, current/legacy API decoding, SSE framing, and 32 shared lyric playback states. Live checks passed for native room join/SSE/cancellation against an isolated room, and muted AVPlayer streaming plus the actual native vocal mixer against a cached GCS song. Simulator UI control was unavailable in the enabled app tools; no native visual-parity claim is made. Hardware performance and iPhone UI behavior require device testing.
+The approved recording design keeps streamed playback. Tap the record icon, choose Audio or Camera, then Stop & Save. A timestamped processed-microphone file and transport timeline capture pauses, buffering, seeks, song changes and vocal gains. Saving downloads cached stems, converts/mixes with bounded PCM buffers, and exports M4A or MP4. Camera timestamps are converted from the capture synchronization clock to the microphone's host clock; camera capture does not configure the shared audio session. Share or save to Files, then tap Done / Discard to remove temporary files.
+
+Sessions are limited to 15 minutes, 512 MiB per downloaded source and 2 GiB temporary storage, with free-space checks. Backgrounding ends capture and requests time to finish saving; an expired background allowance preserves finalized capture for an explicit retry while this app session remains alive. Failed camera finalization offers Save Audio Instead. Cancellation waits for writers/workers before deleting their directory. Abandoned session folders expire after a day when another recording starts. Recovery after app termination and real-device lip sync remain unverified. See [RECORDING_DESIGN.md](RECORDING_DESIGN.md).
+
+## Configuration and model
+
+The simulator defaults to `http://localhost:3000`. For a phone, create ignored `KaraokeTrain/LocalDevelopment.xcconfig` and set `KARAOKE_SERVER_HOST` to the Mac's reachable LAN address. The Mac web app must run with `npm run dev`; the native app does not contact the downloader or hold its secret. Public hosting/authentication are separate pending infrastructure decisions; nothing has been deployed.
+
+The owner's 222 MiB `HTDemucs_CoreML.mlpackage` was moved from Downloads into `KaraokeTrain/KaraokeTrain/HTDemucs_CoreML.mlpackage` and successfully compiled by Xcode. It stays ignored in Git and is excluded from Release builds. Normal playback/processing does not use it. In Debug, Help → Device stem benchmark offers CPU, CPU + GPU and All available modes. Run each on the requested physical iPhone 18; simulator timings describe the Mac. No iPhone benchmark timings have been measured. See [BENCHMARK_PLAN.md](BENCHMARK_PLAN.md).
+
+## Verification
+
+Use Xcode 27 / Swift 6.4, deployment target iOS 17. Debug and Release simulator builds pass. Native checks cover 32 shared web timeline states, lyric decoding/selection and glyph geometry, SSE framing, room schemas/concurrency guards, server processing/cancellation, overlap assembly, microphone permission races/lease isolation, offline gain/mute/echo, timestamped microphone gaps, pause/seek/song/vocal mix reconstruction, sample-rate conversion, and complete synthetic M4A/MP4 exports. Camera export checks inspect the first visible frame to verify its offset, including the exporter's leading black frames.
 
 ```sh
 ./ios/run-tests.sh
-# Optional live checks, while the web app is running. Supply an existing cached video ID.
+# Live status/room checks require an existing ready in-memory job.
 ./ios/run-tests.sh --live-api http://localhost:3000 VIDEO_ID
+# Cached GCS playback/export still work after the in-memory jobs reset.
+./ios/run-tests.sh --live-media http://localhost:3000 VIDEO_ID
 xcodebuild -project ios/KaraokeTrain/KaraokeTrain.xcodeproj -scheme KaraokeTrain \
   -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
   -derivedDataPath /private/tmp/karaoketrain-ios-build CODE_SIGNING_ALLOWED=NO build
 ```
 
-The live room check changes only isolated room `NSSE`; the playback check streams a cached song muted. Neither test processes new media or writes GCS objects. The original branch's `DEVICE_TESTING.md`, `MODEL_SETUP.md` and `PORT_PARITY.md` are historical references and contain paths/protocols from that branch. This README describes the current checkout.
+The host test needs macOS audio/video encoding services; restricted shells may require normal local execution. Live checks use isolated rooms, cached status/lyrics/ranged audio, muted streaming and a one-second export with a synthetic silent microphone. They do not process new songs, capture hardware or write GCS objects. The live retry POST was removed after automatic approval review rejected its processing side effect; mocked tests cover retry/repair. Web verification remains 60 JavaScript + 22 Python checks and clean lint.
 
-Native streaming uses Apple's [URLSession.AsyncBytes](https://developer.apple.com/documentation/foundation/urlsession/asyncbytes); scrolling uses [ScrollViewReader](https://developer.apple.com/documentation/swiftui/scrollviewreader). Backend hosting options and approval boundaries are in [SHARED_BACKEND_PLAN.md](../docs/SHARED_BACKEND_PLAN.md).
+The requested test device is **iPhone 18**. Xcode currently lists an iPhone 18 Pro simulator and a paired physical iPhone Air; the Air is not the selected test device. Hardware validation needs the iPhone 18 paired, developer signing configured, and the LAN server reachable. Check microphone/camera permissions, headphones/Bluetooth, interruptions, capture lip sync, share destinations, long recordings, lyric scrolling, orientation and Dynamic Type. Simulator UI control is unavailable through the enabled app tools, so build/launch checks do not establish visual parity.
 
-## iPhone benchmark
+The original `DEVICE_TESTING.md`, `MODEL_SETUP.md` and `PORT_PARITY.md` are historical references. Shared hosting options and approval boundaries remain in [SHARED_BACKEND_PLAN.md](../docs/SHARED_BACKEND_PLAN.md).
 
-In a Debug build, open Help → Device stem benchmark. Restore the existing Core ML package first; it is not present in this checkout or Git. Run CPU, CPU + GPU and All available modes separately on the physical iPhone. The screen reports a deterministic ten-second synthetic workload, cold-load-inclusive elapsed time, real-time factor, output peak, thermal state and device memory. It does not claim musical quality, peak working-set measurement or whole-pipeline speed. See [BENCHMARK_PLAN.md](BENCHMARK_PLAN.md) for the real-song and Mac comparison protocol. No phone timings have been measured.
-
-Latest checkpoint: the final Debug simulator build and offline/live native checks pass. Live checks read cached status, lyrics and byte-range audio, test host/join/SSE in isolated rooms and stream audio muted. The live retry POST was removed after automatic approval review rejected its possible processing side effect; mocked tests cover retry/repair contracts. No media or credentials were modified.
-
-Next parity work: native microphone/recording, remaining remote controls, lyric-revision refresh from another client, device visual checks and complete live uncached-song validation. Hardware benchmarking needs the missing Core ML asset and a physical phone. Do not infer performance from the simulator.
+Latest verification: Debug and Release builds pass; the app launches and remains running on the iPhone 18 Pro simulator. All offline native checks, real cached AAC stream/mixer playback, real cached M4A recording export and isolated room/SSE checks passed. The transient job-status live check cannot run against the old cached ID after the server job registry reset (404); `--live-media` verifies persistent media without reprocessing. Physical recording, lip sync, UI parity and iPhone 18 benchmark remain pending.

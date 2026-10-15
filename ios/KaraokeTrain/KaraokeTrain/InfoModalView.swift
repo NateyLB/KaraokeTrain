@@ -67,6 +67,12 @@ struct InfoModalView: View {
                         )
 
                         InfoSection(
+                            icon: "record.circle",
+                            title: "Record & Save",
+                            description: "Tap the record icon for audio or camera recording. Stop & Save mixes your microphone and the song, including pauses, seeks and vocal changes. Share the result or save it to Files, then tap Done. Keep the app open while saving."
+                        )
+
+                        InfoSection(
                             icon: "play.fill",
                             title: "Controls",
                             description: "You can toggle the bottom playback controls on and off using the Play icon at the top right to give yourself more screen space for the lyrics and video."

@@ -5,11 +5,8 @@ import UIKit
 
 @MainActor
 class PlayerViewModel: ObservableObject {
-    @Published var searchResults: [Track] = []
-    @Published var isSearching = false
-    @Published var searchError: String?
     @Published var currentTrack: Track?
-    @Published var isPlaying = false
+    @Published var isPlaying = false { didSet { emitTransport() } }
     @Published var isBuffering = false
     @Published private(set) var isReadyForPlayback = false
     @Published var isProcessing = false
@@ -17,6 +14,7 @@ class PlayerViewModel: ObservableObject {
     @Published var processingProgress = 0.0
     @Published var processingError: String?
     @Published var lyricsError: String?
+    @Published private(set) var lyricsSource = "Loading…"
     @Published var lyrics: [LyricLine] = [] {
         didSet { lyricTimeline = LyricTimeline(lyrics) }
     }
@@ -29,8 +27,9 @@ class PlayerViewModel: ObservableObject {
     @Published var songDuration = 1.0
     @Published var lyricsOffset = 0.0
     @Published var vocalsVolume: Float = 1 {
-        didSet { tapContext?.vocalsVolume = vocalsVolume }
+        didSet { applyVocalMix() }
     }
+    @Published var vocalsEnabled = true { didSet { applyVocalMix() } }
     // Config
     private let webServerURL = ServerConfiguration.web
 
@@ -38,6 +37,7 @@ class PlayerViewModel: ObservableObject {
     var serverURL: String { webServerURL }
     private var currentJobID: String?
     private var lyricsTask: Task<Void, Never>?
+    private var lyricsRefreshPending = false
     @Published private(set) var isRetryingLyrics = false
     private var player: AVPlayer?
     private var tapContext: AudioMixer.TapContext?
@@ -46,34 +46,34 @@ class PlayerViewModel: ObservableObject {
     private var itemStatusObserver: NSKeyValueObservation?
     private var playbackStatusObserver: NSKeyValueObservation?
     private var processingTask: Task<Void, Never>?
-    private var searchTask: Task<Void, Never>?
     private var generation = UUID()
     var onSongEnded: (() -> Void)?
+    var onTransport: ((RecordingTransport) -> Void)?
+    private var isSeeking = false
+    private var seekGeneration = UUID()
+    private var audioObservers: [NSObjectProtocol] = []
+    init() {
+        audioObservers.append(NotificationCenter.default.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] note in
+            guard (note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt) == AVAudioSession.InterruptionType.began.rawValue else { return }
+            Task { @MainActor [weak self] in self?.setPlaying(false) }
+        })
+        audioObservers.append(NotificationCenter.default.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { [weak self] note in
+            guard (note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt) == AVAudioSession.RouteChangeReason.oldDeviceUnavailable.rawValue else { return }
+            Task { @MainActor [weak self] in self?.setPlaying(false) }
+        })
+    }
+    var recordingTransport: RecordingTransport {
+        let time = player?.currentTime().seconds ?? 0
+        return RecordingTransport(jobID: isReadyForPlayback ? currentJobID : nil,
+                                  songTime: time.isFinite ? max(0, time) : 0,
+                                  playing: !isSeeking && player?.timeControlStatus == .playing,
+                                  vocalsGain: vocalsEnabled ? Double(vocalsVolume) : 0)
+    }
+    private func emitTransport() { onTransport?(recordingTransport) }
 
-    func search(query: String) {
-        searchTask?.cancel()
-        searchError = nil
-        guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            searchResults = []; isSearching = false; return
-        }
-        isSearching = true
-        searchTask = Task {
-            do {
-                var components = URLComponents(string: webServerURL + "/api/search")
-                components?.queryItems = [URLQueryItem(name: "q", value: query)]
-                guard let url = components?.url else { throw URLError(.badURL) }
-                let (data, response) = try await URLSession.shared.data(from: url)
-                guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { throw URLError(.badServerResponse) }
-                let tracks = try JSONDecoder().decode([Track].self, from: data)
-                try Task.checkCancellation()
-                searchResults = tracks
-                isSearching = false
-            } catch {
-                guard !Task.isCancelled else { return }
-                isSearching = false
-                searchError = error.localizedDescription
-            }
-        }
+    private func applyVocalMix() {
+        tapContext?.vocalsVolume = vocalsEnabled ? vocalsVolume : 0
+        emitTransport()
     }
 
     func playTrack(_ track: Track, jobID: String? = nil) {
@@ -81,6 +81,7 @@ class PlayerViewModel: ObservableObject {
         currentTrack = track
         currentJobID = jobID ?? track.videoId
         lyrics = []
+        lyricsSource = "Loading…"
         lyricVersions = []
         selectedLyricsIndex = 0
         lyricsOffset = 0
@@ -114,8 +115,9 @@ class PlayerViewModel: ObservableObject {
                 self.processingProgress = 1
                 self.processingStatus = "Ready"
                 self.isReadyForPlayback = true
-                self.player?.play()
-                self.isPlaying = true
+                // A fresh queue entry is ready and paused, matching the web host.
+                self.player?.pause()
+                self.isPlaying = false
             } catch {
                 guard let self, self.generation == token, !Task.isCancelled else { return }
                 self.stopAudio()
@@ -123,7 +125,7 @@ class PlayerViewModel: ObservableObject {
                 self.processingError = error.localizedDescription
             }
             if self?.generation == token {
-                UIApplication.shared.isIdleTimerDisabled = false
+                UIApplication.shared.isIdleTimerDisabled = self?.isPlaying == true
                 self?.processingTask = nil
             }
         }
@@ -136,33 +138,35 @@ class PlayerViewModel: ObservableObject {
     }
 
     private func acceptLyrics(_ data: Data) throws {
-        let versions: [LyricsVersion]
-        if let multi = try? JSONDecoder().decode(MultiLyricsResponse.self, from: data) {
-            versions = multi.lyrics
-        } else {
-            let single = try JSONDecoder().decode(LyricsResponse.self, from: data)
-            versions = [LyricsVersion(label: "Default", lyrics: single.lyrics)]
-        }
-        // Reject corrupt timing instead of feeding NaN/Infinity into UI arithmetic.
-        lyricVersions = versions.map { version in
-            LyricsVersion(label: version.label, lyrics: version.lyrics.filter {
-                $0.time.isFinite && $0.time >= 0 && ($0.words ?? []).allSatisfy {
-                    ($0.start ?? 0).isFinite && ($0.end ?? 0).isFinite
-                }
-            }.sorted { $0.time < $1.time })
-        }
-        selectedLyricsIndex = lyricVersions.firstIndex { $0.label?.contains("Romanized") == true } ?? 0
-        lyrics = lyricVersions.indices.contains(selectedLyricsIndex) ? lyricVersions[selectedLyricsIndex].lyrics : []
+        let document = try LyricDocument(data: data)
+        let previousLabel = lyricVersions.indices.contains(selectedLyricsIndex) ? lyricVersions[selectedLyricsIndex].label : nil
+        let selection = document.selection(previousLabel: previousLabel, previousIndex: selectedLyricsIndex, hasPrevious: !lyricVersions.isEmpty)
+        lyricVersions = document.versions
+        lyricsSource = document.sourceLabel
+        selectedLyricsIndex = selection
+        lyrics = lyricVersions.indices.contains(selection) ? lyricVersions[selection].lyrics : []
     }
 
-    func retryLyrics() {
-        guard let jobID = currentJobID, !isRetryingLyrics else { return }
+    func retryLyrics() { loadLyrics(repair: true) }
+    func refreshLyrics() {
+        if lyricsTask != nil { lyricsRefreshPending = true }
+        else { loadLyrics(repair: false) }
+    }
+
+    private func loadLyrics(repair: Bool) {
+        guard let jobID = currentJobID, lyricsTask == nil, isReadyForPlayback else { return }
         let token = generation
         let service = ServerSongService(baseURL: webServerURL)
-        isRetryingLyrics = true
+        isRetryingLyrics = repair
         lyricsTask = Task { [weak self] in
             do {
-                let data = try await service.repairLyrics(jobID: jobID)
+                let data: Data
+                if repair { data = try await service.repairLyrics(jobID: jobID) }
+                else {
+                    let saved = try await service.waitForSong(jobID: jobID) { _, _ in }
+                    guard let lyrics = saved.lyrics else { throw URLError(.cannotParseResponse) }
+                    data = lyrics
+                }
                 try Task.checkCancellation()
                 guard let self, self.generation == token else { return }
                 try self.acceptLyrics(data)
@@ -171,7 +175,10 @@ class PlayerViewModel: ObservableObject {
                 guard !Task.isCancelled, self?.generation == token else { return }
                 self?.lyricsError = error.localizedDescription
             }
-            if self?.generation == token { self?.isRetryingLyrics = false; self?.lyricsTask = nil }
+            if let self, self.generation == token {
+                self.isRetryingLyrics = false; self.lyricsTask = nil
+                if self.lyricsRefreshPending { self.lyricsRefreshPending = false; self.loadLyrics(repair: false) }
+            }
         }
     }
 
@@ -189,6 +196,7 @@ class PlayerViewModel: ObservableObject {
         processingTask?.cancel()
         processingTask = nil
         lyricsTask?.cancel(); lyricsTask = nil
+        lyricsRefreshPending = false
         isRetryingLyrics = false
         isProcessing = false
         UIApplication.shared.isIdleTimerDisabled = false
@@ -196,6 +204,8 @@ class PlayerViewModel: ObservableObject {
     }
 
     private func stopAudio() {
+        emitTransport()
+        isSeeking = false
         isReadyForPlayback = false
         itemStatusObserver = nil
         playbackStatusObserver = nil
@@ -222,7 +232,7 @@ class PlayerViewModel: ObservableObject {
         guard generation == token else { throw CancellationError() }
         guard let track = tracks.first else { throw StemSeparatorError.invalid("No audio track in cached file.") }
         let context = AudioMixer.TapContext()
-        context.vocalsVolume = vocalsVolume
+        context.vocalsVolume = vocalsEnabled ? vocalsVolume : 0
         guard let tap = AudioMixer.createTap(context: context) else {
             throw StemSeparatorError.invalid("Could not initialize the vocal mixer.")
         }
@@ -254,6 +264,7 @@ class PlayerViewModel: ObservableObject {
             Task { @MainActor [weak self] in
                 guard let self, self.generation == token else { return }
                 self.isBuffering = waiting
+                self.emitTransport()
             }
         }
         let deadline = Date().addingTimeInterval(60)
@@ -270,6 +281,7 @@ class PlayerViewModel: ObservableObject {
             Task { @MainActor [weak self] in
                 guard let self, self.generation == token, time.seconds.isFinite else { return }
                 self.currentSongTime = max(0, time.seconds)
+                self.emitTransport()
             }
         }
         endObserver = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { [weak self] _ in
@@ -296,13 +308,24 @@ class PlayerViewModel: ObservableObject {
     func seek(to time: Double) {
         guard !isProcessing, time.isFinite, let player else { return }
         let target = min(max(0, time), songDuration)
-        player.seek(to: CMTime(seconds: target, preferredTimescale: 1000))
+        emitTransport()
+        isSeeking = true
+        emitTransport()
+        let token = generation
+        let seekToken = UUID(); seekGeneration = seekToken
+        player.seek(to: CMTime(seconds: target, preferredTimescale: 1000), toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, self.generation == token, self.seekGeneration == seekToken else { return }
+                self.isSeeking = false
+                self.emitTransport()
+            }
+        }
         currentSongTime = target
     }
 
     deinit {
+        for observer in audioObservers { NotificationCenter.default.removeObserver(observer) }
         processingTask?.cancel()
-        searchTask?.cancel()
         lyricsTask?.cancel()
         if let timeObserverToken { player?.removeTimeObserver(timeObserverToken) }
         if let endObserver { NotificationCenter.default.removeObserver(endObserver) }

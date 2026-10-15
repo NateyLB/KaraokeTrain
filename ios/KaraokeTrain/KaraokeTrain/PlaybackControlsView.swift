@@ -32,8 +32,8 @@ struct PlaybackControlsView: View {
                     } label: { Image(systemName: "character.bubble").frame(width: 36, height: 36) }
                     .accessibilityLabel("Switch lyrics language")
                 }
-                icon(player.vocalsVolume > 0 ? "speaker.wave.2.fill" : "speaker.slash.fill", "Toggle vocals") {
-                    player.vocalsVolume = player.vocalsVolume > 0 ? 0 : 1
+                icon(player.vocalsEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill", "Toggle vocals") {
+                    player.vocalsEnabled.toggle()
                 }
                 icon(hideVideo ? "video.slash" : "video", "Toggle video") { hideVideo.toggle() }
                 Button("Align") { player.lyricsOffset = player.currentSongTime - firstTime }

@@ -10,6 +10,8 @@ struct RemoteView: View {
     @State private var showInfo = false
     @State private var remoteVocals = 1.0
     @State private var adjustingVocals = false
+    @State private var remoteMic = 1.0
+    @State private var adjustingMic = false
 
     private let background = Color(red: 10 / 255, green: 5 / 255, blue: 20 / 255)
     private let primary = Color(red: 139 / 255, green: 92 / 255, blue: 246 / 255)
@@ -54,9 +56,13 @@ struct RemoteView: View {
         .onAppear {
             DeviceOrientation.request(.portrait)
             remoteVocals = partyViewModel.partyState?.settings?.vocalsVolume ?? 1
+            remoteMic = partyViewModel.partyState?.settings?.micVolume ?? 1
         }
         .onChange(of: partyViewModel.partyState?.settings?.vocalsVolume) { _, value in
             if !adjustingVocals, let value { remoteVocals = min(1, max(0, value)) }
+        }
+        .onChange(of: partyViewModel.partyState?.settings?.micVolume) { _, value in
+            if !adjustingMic, let value { remoteMic = min(1, max(0, value)) }
         }
         .sheet(isPresented: $showSearch) {
             SearchView(partyViewModel: partyViewModel) {
@@ -169,16 +175,29 @@ struct RemoteView: View {
                 }
                 Button((partyViewModel.partyState?.settings?.vocalsEnabled ?? true) ? "Vocals On" : "Vocals Off") {
                     let enable = !(partyViewModel.partyState?.settings?.vocalsEnabled ?? true)
-                    partyViewModel.updateSettings(["vocalsEnabled": enable, "vocalsVolume": enable ? 1.0 : 0.0], sender: "remote")
+                    partyViewModel.updateSettings(["vocalsEnabled": enable], sender: "remote")
                 }
             }.buttonStyle(.bordered).tint(primary).font(.caption.bold())
             HStack {
                 Text("VOC").font(.caption).foregroundStyle(.gray)
                 Slider(value: Binding(get: { remoteVocals }, set: {
                     remoteVocals = $0
-                    partyViewModel.updateSettings(["vocalsVolume": $0, "vocalsEnabled": $0 > 0], sender: "remote")
+                    partyViewModel.updateSettings(["vocalsVolume": $0], sender: "remote")
                 }), in: 0...1, onEditingChanged: { adjustingVocals = $0 })
                     .tint(secondary)
+            }
+            HStack {
+                remoteToggle("Mic", key: "micEnabled", enabled: partyViewModel.partyState?.settings?.micEnabled ?? false)
+                remoteToggle("Echo", key: "echoOn", enabled: partyViewModel.partyState?.settings?.echoOn ?? false)
+                remoteToggle("AutoTune", key: "autoTuneOn", enabled: partyViewModel.partyState?.settings?.autoTuneOn ?? false)
+            }.buttonStyle(.bordered).tint(secondary).font(.caption.bold())
+            HStack {
+                Text("MIC").font(.caption).foregroundStyle(.gray)
+                Slider(value: Binding(get: { remoteMic }, set: {
+                    remoteMic = $0
+                    partyViewModel.updateSettings(["micVolume": $0], sender: "remote")
+                }), in: 0...1, onEditingChanged: { adjustingMic = $0 }).tint(secondary)
+                    .accessibilityLabel("Host microphone volume")
             }
             HStack {
                 Text("Lyrics Sync").font(.caption)
@@ -190,6 +209,12 @@ struct RemoteView: View {
                 Button("+") { changeOffset(0.5) }
             }
         }.foregroundStyle(.white)
+    }
+
+    private func remoteToggle(_ title: String, key: String, enabled: Bool) -> some View {
+        Button("\(title) \(enabled ? "On" : "Off")") {
+            partyViewModel.updateSettings([key: !enabled], sender: "remote")
+        }
     }
 
     private func changeOffset(_ change: Double) {

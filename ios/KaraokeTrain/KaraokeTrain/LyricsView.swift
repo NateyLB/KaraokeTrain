@@ -52,6 +52,10 @@ struct LyricsView: View {
                 .onChange(of: geometry.size) { _, _ in scroll(proxy, at: adjustedTime, animated: false) }
             }
         }
+        .overlay(alignment: .bottomTrailing) {
+            Text("Source: \(viewModel.lyricsSource)")
+                .font(.caption2).foregroundStyle(.secondary).padding(8)
+        }
     }
 
     private func scroll(_ proxy: ScrollViewProxy, at time: Double, animated: Bool) {
@@ -76,7 +80,7 @@ private struct LyricRowView: View, Equatable {
     private static let accent = Color(red: 139/255, green: 92/255, blue: 246/255)
 
     var body: some View {
-        Text(attributedText)
+        WordHighlightText(line: line, time: time, highlight: highlight)
             .font(.system(size: 28, weight: .medium, design: .rounded))
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity)
@@ -87,19 +91,4 @@ private struct LyricRowView: View, Equatable {
             .animation(reduceMotion ? nil : .easeOut(duration: 0.25), value: featured)
     }
 
-    private var attributedText: AttributedString {
-        guard !line.words.isEmpty else { return AttributedString(line.text) }
-        var result = AttributedString()
-        for (index, word) in line.words.enumerated() {
-            let count = highlight ? Int(LyricTimeline.wordProgress(word, at: time) * Double(word.word.count)) : word.word.count
-            var filled = AttributedString(String(word.word.prefix(count)))
-            filled.foregroundColor = .white
-            var remaining = AttributedString(String(word.word.dropFirst(count)))
-            remaining.foregroundColor = Self.accent
-            result += filled + remaining
-            let next = index + 1 < line.words.count ? line.words[index + 1].word : nil
-            result += AttributedString(LyricTimeline.separator(word.word, before: next))
-        }
-        return result
-    }
 }

@@ -5,6 +5,9 @@ struct RoomView: View {
     @Environment(\.scenePhase) private var scenePhase
     @ObservedObject var partyViewModel: PartyViewModel
     @StateObject private var playerViewModel = PlayerViewModel()
+    @StateObject private var microphone = MicrophoneModel()
+    @StateObject private var recording = RecordingModel()
+    @State private var showRecording = false
     @State private var loadedSongID: String?
     @State private var lastRemoteSettings: Double = 0
     @State private var lastRemoteCommand: Double = 0
@@ -39,6 +42,7 @@ struct RoomView: View {
                 // Top Header
                 HStack(alignment: .center) {
                     Button(action: {
+                        if recording.phase != .idle { showRecording = true; return }
                         playerViewModel.stop()
                         partyViewModel.leaveParty()
                         dismiss()
@@ -81,6 +85,13 @@ struct RoomView: View {
 
                     // Top Right Icons (Overlay Controls)
                         HStack(spacing: 8) {
+                            if showsPlayback || recording.phase != .idle {
+                            Button { showRecording.toggle(); isMicExpanded = false } label: {
+                                Image(systemName: recording.phase == .recording ? "stop.circle.fill" : "record.circle")
+                                    .foregroundStyle(recording.phase == .recording ? .red : .pink)
+                                    .frame(width: 36, height: 36).background(.white.opacity(0.05)).clipShape(Circle())
+                            }.accessibilityLabel("Record performance")
+                            }
                             if showsPlayback {
                             // 0. Toggle Playback Controls
                             Button(action: {
@@ -253,6 +264,16 @@ struct RoomView: View {
             }
 
             // Overlays
+            if showRecording {
+                HStack {
+                    Spacer()
+                    VStack {
+                        RecordingPanelView(model: recording, microphone: microphone, isPresented: $showRecording)
+                            .padding(.top, 55).padding(.trailing, 12)
+                        Spacer()
+                    }
+                }.zIndex(5)
+            }
             if showQueue {
                 GeometryReader { geometry in
                 VStack {
@@ -272,7 +293,7 @@ struct RoomView: View {
                 HStack {
                     Spacer()
                     VStack {
-                        MicrophonePanelView(isMicExpanded: $isMicExpanded, viewModel: playerViewModel)
+                        MicrophonePanelView(isMicExpanded: $isMicExpanded, viewModel: playerViewModel, microphone: microphone)
                             .padding(.top, 60)
                             .padding(.trailing, 20)
                         Spacer()
@@ -312,12 +333,26 @@ struct RoomView: View {
             }
         }
         .onChange(of: partyViewModel.partyState?.currentSong?.id, initial: true) { _, _ in
-            playerViewModel.onSongEnded = { roomCommand("next") }
+            playerViewModel.onTransport = { recording.update($0) }
+            recording.transportSnapshot = { [weak player = playerViewModel] in
+                player?.recordingTransport ?? RecordingTransport(jobID: nil, songTime: 0, playing: false, vocalsGain: 0)
+            }
+            let endedQueueID = partyViewModel.partyState?.currentSong?.queueId
+            playerViewModel.onSongEnded = { [weak party = partyViewModel] in
+                Task {
+                    do { try await party?.sendCommand(action: "next", payload: ["expectedCurrentQueueId": endedQueueID as Any? ?? NSNull()]) }
+                    catch { party?.errorMessage = error.localizedDescription }
+                }
+            }
             if let song = partyViewModel.partyState?.currentSong { playCurrentSong(song) }
-            else { loadedSongID = nil; playerViewModel.stop() }
+            else { loadedSongID = nil; microphone.stop(); playerViewModel.stop() }
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .background { playerViewModel.handleBackground() }
+            if phase == .background {
+                if recording.phase == .recording { recording.save(); showRecording = true }
+                else if recording.phase == .preparing { recording.discard() }
+                microphone.stop(); playerViewModel.handleBackground()
+            }
             if phase == .active {
                 DeviceOrientation.request(roomOrientation)
                 if !playerViewModel.isReadyForPlayback, !playerViewModel.isProcessing,
@@ -326,6 +361,10 @@ struct RoomView: View {
         }
         .onChange(of: playerViewModel.isProcessing) { _, _ in updateIdleTimer() }
         .onChange(of: playerViewModel.isPlaying) { _, _ in updateIdleTimer() }
+        .onChange(of: recording.phase) { _, _ in updateIdleTimer() }
+        .onChange(of: partyViewModel.partyState?.currentSong?.jobStatus?.lyricsRevision) { _, revision in
+            if revision != nil, showsPlayback { playerViewModel.refreshLyrics() }
+        }
         .onChange(of: playbackSnapshot) { _, value in
             if value == remoteAppliedSnapshot { remoteAppliedSnapshot = nil; return }
             guard showsPlayback else { return }
@@ -344,6 +383,7 @@ struct RoomView: View {
             case "alignStart": playerViewModel.lyricsOffset = playerViewModel.currentSongTime - (playerViewModel.lyricTimeline.lines.first?.start ?? 0)
             case "togglePlay": playerViewModel.togglePlayPause()
             case "toggleVideo": hideVideo.toggle()
+            case "toggleMic": microphone.setEnabled(!microphone.enabled)
             default: break
             }
         }
@@ -356,7 +396,11 @@ struct RoomView: View {
             })
         }
         .onDisappear {
-            if !showSearch { playerViewModel.stop() }
+            if !showSearch {
+                recording.discard(); microphone.stop(); playerViewModel.stop()
+                recording.transportSnapshot = nil
+                playerViewModel.onTransport = nil; playerViewModel.onSongEnded = nil
+            }
         }
     }
 
@@ -415,22 +459,30 @@ struct RoomView: View {
     }
 
     private func updateIdleTimer() {
-        UIApplication.shared.isIdleTimerDisabled = playerViewModel.isProcessing || playerViewModel.isPlaying
+        UIApplication.shared.isIdleTimerDisabled = playerViewModel.isProcessing || playerViewModel.isPlaying || recording.phase == .recording || recording.phase == .exporting
     }
 
     private struct PlaybackSnapshot: Equatable {
         let playing: Bool
         let vocals: Float
+        let vocalsEnabled: Bool
+        let micEnabled: Bool
+        let micVolume: Double
+        let echo: Bool
+        let autoTune: Bool
         let offset: Double
         let firstTime: Double
         let video: Bool
         var payload: [String: Any] {
-            ["isPlaying": playing, "vocalsEnabled": vocals > 0, "vocalsVolume": Double(vocals),
+            ["isPlaying": playing, "vocalsEnabled": vocalsEnabled, "vocalsVolume": Double(vocals),
+             "micEnabled": micEnabled, "micVolume": micVolume, "echoOn": echo, "autoTuneOn": autoTune,
              "lyricsOffset": offset, "firstValidTime": firstTime, "isVideoVisible": video]
         }
     }
     private var playbackSnapshot: PlaybackSnapshot {
         PlaybackSnapshot(playing: playerViewModel.isPlaying, vocals: playerViewModel.vocalsVolume,
+                         vocalsEnabled: playerViewModel.vocalsEnabled, micEnabled: microphone.enabled,
+                         micVolume: microphone.volume, echo: microphone.echo, autoTune: microphone.autoTune,
                          offset: playerViewModel.lyricsOffset, firstTime: playerViewModel.lyricTimeline.lines.first?.start ?? 0, video: !hideVideo)
     }
     private func applyRemoteSettings(_ settings: PartySettings?) {
@@ -440,9 +492,12 @@ struct RoomView: View {
         if let playing = settings.isPlaying { playerViewModel.setPlaying(playing) }
         if let visible = settings.isVideoVisible { hideVideo = !visible }
         if let offset = settings.lyricsOffset { playerViewModel.lyricsOffset = offset }
-        if settings.vocalsEnabled == false { playerViewModel.vocalsVolume = 0 }
-        else if let volume = settings.vocalsVolume { playerViewModel.vocalsVolume = Float(min(1, max(0, volume))) }
-        else if settings.vocalsEnabled == true && playerViewModel.vocalsVolume == 0 { playerViewModel.vocalsVolume = 1 }
+        if let enabled = settings.vocalsEnabled { playerViewModel.vocalsEnabled = enabled }
+        if let volume = settings.vocalsVolume { playerViewModel.vocalsVolume = Float(min(1, max(0, volume))) }
+        if let volume = settings.micVolume { microphone.volume = min(1, max(0, volume)) }
+        if let enabled = settings.echoOn { microphone.echo = enabled }
+        if let enabled = settings.autoTuneOn { microphone.autoTune = enabled }
+        if let enabled = settings.micEnabled { microphone.setEnabled(enabled) }
         remoteAppliedSnapshot = playbackSnapshot
     }
     private func roomCommand(_ action: String) {

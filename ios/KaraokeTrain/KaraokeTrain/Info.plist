@@ -3,7 +3,9 @@
 <plist version="1.0">
 <dict>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Use the microphone when you tap voice search to find songs.</string>
+	<string>Use the microphone for singing, recordings and voice search when you enable them.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Record your karaoke performance when you choose camera recording.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Turn your spoken song requests into search text.</string>
 	<key>KaraokeServerURL</key>
