@@ -4,16 +4,20 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { setTimeout as delay } from 'node:timers/promises';
 import { checkCache, getCachedCatalog, getSavedTranscription } from '../lib/storage/index.js';
-import { metadataHash } from '../lib/lyrics/cacheMaintenance.js';
+import { cachedCandidates, isLRCLIB, metadataHash, publicationPlan } from '../lib/lyrics/cacheMaintenance.js';
 import { sanitizeForLog } from '../lib/http/validators.js';
+import { formatLyrics } from '../lib/lyrics/engine.js';
+import { runProcess } from '../lib/processing/processRunner.js';
+import { randomUUID } from 'node:crypto';
 
 const { values } = parseArgs({ options: {
   prepare: { type: 'boolean', default: false }, analyze: { type: 'boolean', default: false }, run: { type: 'string' },
-  server: { type: 'string', default: 'http://localhost:3000' }, limit: { type: 'string' },
+  preview: { type: 'boolean', default: false },
+  server: { type: 'string', default: 'http://localhost:3000' }, limit: { type: 'string' }, ids: { type: 'string' },
 } });
 const root = fileURLToPath(new URL('../', import.meta.url));
 if (values.prepare) {
-  if (values.run || values.limit || values.analyze) throw new Error('--prepare creates a fresh backup; do not combine it with --run, --analyze or --limit.');
+  if (values.run || values.limit || values.analyze || values.preview || values.ids !== undefined) throw new Error('--prepare creates a fresh backup; do not combine it with processing options.');
   const catalog = await getCachedCatalog();
   const directory = path.join(root, 'uploads', '.lyric-refresh', new Date().toISOString().replace(/[:.]/g, '-'));
   await fs.mkdir(path.dirname(directory), { recursive: true });
@@ -55,11 +59,60 @@ if (!values.run || !run.startsWith(path.join(root, 'uploads', '.lyric-refresh') 
 }
 const inventory = JSON.parse(await fs.readFile(path.join(run, 'inventory.json'), 'utf8'));
 if (inventory.some(song => song.error)) throw new Error('The snapshot has backup errors; prepare a fresh snapshot before processing.');
+const selected = values.ids === undefined ? null : new Set(values.ids.split(',').map(id => id.trim()).filter(Boolean));
+if (selected && (!selected.size || [...selected].some(id => !inventory.some(song => song.videoId === id)))) {
+  throw new Error('--ids must name one or more comma-separated video IDs from this snapshot.');
+}
 const journalPath = path.join(run, 'results.json');
 let journal;
 try { journal = JSON.parse(await fs.readFile(journalPath, 'utf8')); }
 catch (error) { if (error.code !== 'ENOENT') throw error; journal = { version: 1, runId, entries: {}, startedAt: new Date().toISOString() }; }
 if (journal.runId !== runId) throw new Error('The journal belongs to another run.');
+if (values.preview) {
+  if (values.analyze || values.limit || (process.env.LYRICS_ASR_PROVIDER || 'qwen') !== 'qwen') {
+    throw new Error('--preview requires the Qwen provider and cannot be combined with --analyze or --limit.');
+  }
+  const texts = lyrics => (Array.isArray(lyrics?.[0]?.lyrics) ? lyrics : [{ lyrics }])
+    .map(version => (version.lyrics || []).map(line => line.text));
+  const entries = [];
+  for (const song of inventory) {
+    if (selected && !selected.has(song.videoId)) continue;
+    const entry = journal.entries[song.videoId];
+    if (!['done', 'analyzed', 'review'].includes(entry?.status)) continue;
+    const directory = path.join(run, song.videoId);
+    const input = path.join(directory, `preview-input-${randomUUID()}.json`);
+    try {
+      const metadata = JSON.parse(await fs.readFile(path.join(directory, 'metadata.before.json'), 'utf8'));
+      const transcriptPath = path.join(directory, entry.status === 'done' ? 'transcription.after.json' : 'transcription.candidate.json');
+      const transcript = JSON.parse(await fs.readFile(transcriptPath, 'utf8'));
+      if (transcript?.provider !== 'qwen' || !transcript.independent || transcript.version !== 3) {
+        throw new Error('No reusable independent Qwen transcript.');
+      }
+      await fs.writeFile(input, JSON.stringify(formatLyrics(isLRCLIB(metadata) ? cachedCandidates(song.videoId, metadata) : null)));
+      // No --wav argument: this worker can only reuse the saved transcript.
+      // It cannot load a model, regenerate audio, or publish to storage.
+      const { stdout } = await runProcess(path.join(root, 'venv', 'bin', 'python3'), [
+        path.join(root, 'lib', 'lyrics', 'lyrics_worker.py'), '--lyrics_file', input, '--transcript_file', transcriptPath,
+      ], { maxOutput: 16 * 1024 * 1024, timeoutMs: 60000 });
+      const result = JSON.parse(stdout);
+      const { transcription: _transcription, ...alignment } = result;
+      await fs.writeFile(path.join(directory, 'alignment.candidate.json'), JSON.stringify(alignment));
+      const plan = publicationPlan(metadata, result);
+      const wordingUnchanged = JSON.stringify(texts(metadata.lyrics)) === JSON.stringify(texts(result.lyrics));
+      entries.push({ videoId: song.videoId, title: song.title, status: entry.status, action: plan.action,
+        wordingUnchanged, safeToPublish: Boolean(plan.result && entry.report?.reason !== 'timing_pass_failed' &&
+          (!isLRCLIB(metadata) || plan.action === 'verified-lrclib' || wordingUnchanged)) });
+    } catch (error) { entries.push({ videoId: song.videoId, title: song.title, error: error.message, safeToPublish: false }); }
+    finally { await fs.rm(input, { force: true }); }
+  }
+  const summary = { runId, checkedAt: new Date().toISOString(), entries,
+    safeIds: entries.filter(entry => entry.status !== 'done' && entry.safeToPublish).map(entry => entry.videoId) };
+  const temporary = path.join(run, `preview-summary-${process.pid}.tmp`);
+  await fs.writeFile(temporary, JSON.stringify(summary, null, 2));
+  await fs.rename(temporary, path.join(run, 'preview-summary.json'));
+  console.log(JSON.stringify({ run, prepared: entries.length, safeIds: summary.safeIds, errors: entries.filter(entry => entry.error) }));
+  process.exit(summary.entries.some(entry => entry.error) ? 1 : 0);
+}
 const lockPath = path.join(run, '.lock');
 try {
   const prior = JSON.parse(await fs.readFile(lockPath, 'utf8'));
@@ -92,6 +145,7 @@ try {
   journal.status = 'running';
   await checkpoint();
   for (const song of [...inventory].sort((a, b) => priority(a) - priority(b))) {
+    if (selected && !selected.has(song.videoId)) continue;
     if (journal.entries[song.videoId]?.status === 'done') continue;
     if (values.analyze && journal.entries[song.videoId]?.status === 'analyzed') continue;
     if (stopping || attempted >= limit) break;
@@ -155,7 +209,7 @@ try {
     review: entries.filter(row => row.status === 'review').length, failed: entries.filter(row => row.status === 'failed').length,
     total: inventory.length };
   journal.counts = counts;
-  journal.status = counts.done === inventory.length ? 'complete' : attempted >= limit || stopping ? 'paused' : values.analyze ? 'analyzed' : 'needs-review';
+  journal.status = counts.done === inventory.length ? 'complete' : attempted >= limit || stopping || selected ? 'paused' : values.analyze ? 'analyzed' : 'needs-review';
   await checkpoint();
   const rows = inventory.map(song => {
     const entry = journal.entries[song.videoId];
