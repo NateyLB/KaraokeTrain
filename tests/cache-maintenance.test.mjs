@@ -41,6 +41,31 @@ test('Whisper-only and missing results upgrade through independent Qwen evidence
   assert.throws(() => publicationPlan(metadata, { ...result, transcription: { provider: 'whisper' } }), /independent Qwen/);
 });
 
+test('LRCLIB maintenance holds hybrid substitutions and omitted reference lines', () => {
+  for (const lyrics of [
+    [{ ...line, text: 'A different transcription' }],
+    [{ ...line }, { ...line, text: 'An added transcription line' }],
+  ]) {
+    const plan = publicationPlan(metadata, { ...result, lyrics });
+    assert.equal(plan.action, 'review-required');
+    assert.equal(plan.reason, 'reference_wording_changed');
+    assert.equal(plan.result, undefined);
+  }
+  const twoLines = { ...metadata, lyrics: [line, { ...line, text: 'Another saved line' }] };
+  assert.equal(publicationPlan(twoLines, result).reason, 'reference_wording_changed');
+});
+
+test('LRCLIB maintenance preserves every original and phonetic version', () => {
+  const saved = { ...metadata, lyrics: [{ label: 'Original', lyrics: [line] },
+    { label: 'Romanized', lyrics: [{ ...line, text: 'Phonetic reference' }] }] };
+  const aligned = { ...result, lyrics: saved.lyrics.map(version => ({ ...version,
+    lyrics: version.lyrics.map(item => ({ ...item, time: 2 })) })) };
+  assert.equal(publicationPlan(saved, aligned).action, 'realigned-lrclib');
+  aligned.lyrics[1].lyrics[0].text = 'Replaced phonetics';
+  assert.equal(publicationPlan(saved, aligned).reason, 'reference_wording_changed');
+  assert.equal(publicationPlan(saved, { ...result, lyrics: [line] }).reason, 'reference_wording_changed');
+});
+
 test('maintenance requests require a backup hash and safe run identity; normal repair is unchanged', () => {
   const body = { mode: 'refresh-cache', runId: '2026-10-15-run', expectedMetadataHash: metadataHash(metadata) };
   assert.equal(validateMaintenance(body), true);
