@@ -7,6 +7,7 @@ struct YouTubePlayerView: UIViewRepresentable {
     let isPlaying: Bool
     let currentTime: Double
     var onError: (String?) -> Void = { _ in }
+    var onPlaybackRequested: (Bool) -> Void = { _ in }
 
     func makeUIView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
@@ -27,6 +28,7 @@ struct YouTubePlayerView: UIViewRepresentable {
     func updateUIView(_ view: WKWebView, context: Context) {
         let coordinator = context.coordinator
         coordinator.onError = onError
+        coordinator.onPlaybackRequested = onPlaybackRequested
         coordinator.time = currentTime.isFinite ? max(0, currentTime) : 0
         coordinator.playing = isPlaying
         guard videoId.range(of: #"^[a-zA-Z0-9_-]{11}$"#, options: .regularExpression) != nil else {
@@ -68,12 +70,14 @@ struct YouTubePlayerView: UIViewRepresentable {
     final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         weak var webView: WKWebView?
         var onError: (String?) -> Void = { _ in }
+        var onPlaybackRequested: (Bool) -> Void = { _ in }
         var videoId: String?
         var ready = false
         var time = 0.0
         var playing = false
         var lastTime = -1.0
         var lastPlaying = false
+        var playbackRevision = 0
         var timeout: Task<Void, Never>?
 
         func report(_ message: String?) {
@@ -94,7 +98,7 @@ struct YouTubePlayerView: UIViewRepresentable {
         }
 
         func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
-            guard message.frameInfo.isMainFrame,
+            guard let webView, message.webView === webView, message.frameInfo.isMainFrame,
                   let body = message.body as? [String: Any], body["videoId"] as? String == videoId,
                   let type = body["type"] as? String else { return }
             switch type {
@@ -105,6 +109,10 @@ struct YouTubePlayerView: UIViewRepresentable {
                 report(nil)
                 synchronize() // Send the latest state, not the state at HTML load time.
             case "playing": report(nil)
+            case "playbackRequested":
+                guard ready, let revision = body["revision"] as? Int, revision == playbackRevision,
+                      let requested = body["playing"] as? Bool else { return }
+                onPlaybackRequested(requested)
             case "blocked": report("YouTube blocked automatic playback. Tap the video to start it.")
             case "network": timeout?.cancel(); report("Could not load YouTube. Check the internet connection and retry video.")
             case "error":
@@ -122,10 +130,11 @@ struct YouTubePlayerView: UIViewRepresentable {
 
         func synchronize() {
             guard ready, let webView else { return }
+            if lastTime < 0 || lastPlaying != playing { playbackRevision += 1 }
             lastTime = time
             lastPlaying = playing
             let id = videoId
-            webView.evaluateJavaScript("window.syncPlayback(\(time), \(playing ? "true" : "false"));") { [weak self] _, error in
+            webView.evaluateJavaScript("window.syncPlayback(\(time), \(playing ? "true" : "false"), \(playbackRevision));") { [weak self] _, error in
                 guard let self, self.videoId == id, error != nil else { return }
                 self.report("Could not communicate with the YouTube player. Retry video.")
             }

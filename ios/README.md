@@ -8,6 +8,8 @@ The owner approved **Mac mini processing first**, reusing the current web API, w
 
 The SwiftUI app includes home, host/remote, catalog/search/DJ/voice search, queue controls, video, lyrics, microphone, recording and help components. Room SSE supports reconnection, cancellation and bounded framing. Queue actions carry entry identities; automatic advance guards the song that actually ended. This is still a port under validation; no complete visual/device parity claim is made.
 
+YouTube's play/pause controls also control the separated audio and lyric clock. Native playback commands carry revisions so delayed video events cannot override a newer pause; buffering and transient seek events do not become user playback requests. The video stays muted and follows the audio clock.
+
 Lyrics use authoritative word timing, continuous fill across glyph widths and wrapped words, stable layout, source labels, countdowns, seek snapping and Reduce Motion. Repaired lyrics retain the selected language. Revisions from another client refresh the lyrics without restarting audio.
 
 ## Microphone and recording
@@ -39,7 +41,7 @@ xcodebuild -project ios/KaraokeTrain/KaraokeTrain.xcodeproj -scheme KaraokeTrain
   -derivedDataPath /private/tmp/karaoketrain-ios-build CODE_SIGNING_ALLOWED=NO build
 ```
 
-The host test needs macOS audio/video encoding services; restricted shells may require normal local execution. Live checks use isolated rooms, cached status/lyrics/ranged audio, muted streaming and a one-second export with a synthetic silent microphone. They do not process new songs, capture hardware or write GCS objects. The live retry POST was removed after automatic approval review rejected its processing side effect; mocked tests cover retry/repair. Web verification remains 60 JavaScript + 22 Python checks and clean lint.
+The host test needs Node.js and macOS audio/video encoding services; restricted shells may require normal local execution. It includes regression checks for YouTube user controls, native command acknowledgments, buffering, seeking and stale playback revisions. Live checks use isolated rooms, cached status/lyrics/ranged audio, muted streaming and a one-second export with a synthetic silent microphone. They do not process new songs, capture hardware or write GCS objects. The live retry POST was removed after automatic approval review rejected its processing side effect; mocked tests cover retry/repair. Repository verification includes 66 JavaScript + 22 Python checks and clean lint.
 
 The requested test device is **iPhone 18**. Xcode currently lists an iPhone 18 Pro simulator and a paired physical iPhone Air; the Air is not the selected test device. Hardware validation needs the iPhone 18 paired, developer signing configured, and the LAN server reachable. Check microphone/camera permissions, headphones/Bluetooth, interruptions, capture lip sync, share destinations, long recordings, lyric scrolling, orientation and Dynamic Type. Simulator UI control is unavailable through the enabled app tools, so build/launch checks do not establish visual parity.
 

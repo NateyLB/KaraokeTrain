@@ -15,6 +15,7 @@ compile_and_run() {
 }
 
 cd "$native_repo_root"
+node --test tests/youtube-bridge.test.mjs
 compile_and_run timeline "$native_sources/LyricsModel.swift" "$native_sources/LyricTimeline.swift" "$native_test_root/Tests/LyricTimelineSmoke.swift"
 compile_and_run document "$native_sources/LyricsModel.swift" "$native_sources/LyricTimeline.swift" "$native_sources/LyricDocument.swift" "$native_test_root/Tests/LyricDocumentSmoke.swift"
 compile_and_run glyphs "$native_sources/LyricsModel.swift" "$native_sources/LyricTimeline.swift" "$native_sources/LyricTextLayout.swift" "$native_test_root/Tests/LyricTextLayoutSmoke.swift"

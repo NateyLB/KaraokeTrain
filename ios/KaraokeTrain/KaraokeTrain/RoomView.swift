@@ -199,7 +199,8 @@ struct RoomView: View {
                                             YouTubePlayerView(videoId: currentSong.videoId,
                                                               isPlaying: playerViewModel.isPlaying && !playerViewModel.isBuffering,
                                                               currentTime: playerViewModel.currentSongTime,
-                                                              onError: { videoError = $0 })
+                                                              onError: { videoError = $0 },
+                                                              onPlaybackRequested: { [weak player = playerViewModel] in player?.setPlaying($0) })
                                                 .id(videoReloadID)
                                                 .aspectRatio(16/9, contentMode: .fit)
                                                 .cornerRadius(16)
