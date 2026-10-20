@@ -11,13 +11,22 @@ The secured production API and downloader are installed as user launch agents on
 restart on failure. The API prevents idle sleep while it runs. The development
 server on port 3000 is preserved. Neither new listener is directly public.
 
-Public activation of `https://app.karaoketrain.com` is pending the Cloudflare
-administrator certificate callback. The owner explicitly authorized that
-credential setup. Two CLI login attempts timed out without writing a certificate despite
-reported success in the browser. Callback-host HTTPS connectivity was verified;
-manual certificate download is the next supported fallback. No tunnel or DNS record has been created yet. Do not
-describe the app as reachable on cellular until the public hostname, TLS and
-authenticated media have been verified.
+`https://app.karaoketrain.com` became live on October 19, 2026 after the owner
+completed CLI login successfully. Its dedicated `karaoketrain-mac-mini` named
+tunnel is installed as a user launch agent, with four connected Cloudflare
+connections at activation. Only this hostname routes to port 3100; unmatched
+hostnames return 404. The downloader remains private on loopback port 4100.
+The account certificate, tunnel credential and actual ingress configuration
+are kept in the ignored `.runtime/cloudflared` directory with private permissions.
+
+Public HTTPS checks passed for health, 13 anonymous API denials, single-use
+pairing, cookie CSRF, guest room scopes, all 103 catalog entries, cached
+processing bypass, a private GCS audio byte range and active SSE revocation.
+Temporary test credentials and invitations were removed after verification.
+The production build includes the LRCLIB wording publication safeguard in
+`91cb6c3`. The prior build is retained privately for rollback. The public browser
+displays the expected **Pair this device** screen. A physical iPhone/cellular
+playback and recording check remains pending.
 
 The native source supports pairing by scanning a QR code or pasting a link,
 Keychain storage, authenticated room/search/processing/recording requests, and
@@ -108,7 +117,7 @@ Validate the tunnel configuration, create the exact DNS route, and install its
 launch agent with `node tools/mac-services.mjs --tunnel --install`. Never put a
 tunnel token in command output, Git or the iOS app.
 
-Once the public hostname is healthy, issue the initial owner pairing:
+To issue an owner pairing locally:
 
 ```sh
 npm run access -- pair --role owner --name "Owner phone"
@@ -123,7 +132,7 @@ Nothing sends an invitation to another person automatically.
 
 ## Verification
 
-`npm test` passes 91 JavaScript and 28 Python checks. Lint, the production build,
+`npm test` passes 93 JavaScript and 28 Python checks. Lint, the production build,
 the native regression suite, and iOS Debug/Release simulator builds pass. The
 production dependency audit reports zero known vulnerabilities. Live tests use
 an isolated production process and temporary credentials:
@@ -131,6 +140,12 @@ an isolated production process and temporary credentials:
 ```sh
 node --env-file=.env.local --env-file=.env.production.local tools/check-remote-access.mjs
 ```
+
+To check the installed server through Cloudflare, add `--public`. It requires
+the paired production environment, creates temporary owner/guest credentials
+and a random room, then removes only its own credentials and invitations. It
+does not restart the public server. SSE checks parse complete events rather
+than assuming each network chunk contains one event.
 
 They verify denied anonymous routes, single-use pairing, secure cookie flags,
 CSRF, room-scoped guests, revocation of an active SSE connection, all 103 saved
