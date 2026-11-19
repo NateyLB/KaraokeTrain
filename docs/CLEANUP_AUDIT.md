@@ -1,5 +1,24 @@
 # Cleanup continuation checkpoint
 
+November 18 deployment recovery: restored the existing secure Mac mini deployment
+at `https://app.karaoketrain.com`. All three launch agents had been crashing
+because their Node 26.10 Cellar binary referenced a removed Homebrew library.
+The installer now uses Homebrew's stable formula executable, a fixed PATH, and
+explicit `--install --update` support with identity checks, private backups and
+bootstrap rollback. API/downloader/tunnel definitions were updated and all three
+services are running; ports 3100/4100 remain bound to loopback. Next.js and its
+lint configuration were patched to 16.4.6 and compatible dependency advisories
+were resolved. All 96 JavaScript and 28 Python checks, lint and a fresh production
+build pass; the production dependency audit reports zero known vulnerabilities.
+Isolated and public HTTPS checks again verified 13 anonymous denials, single-use
+pairing, CSRF, room-scoped guests, all 103 catalog entries, cached bypass, private
+GCS ranged audio and active stream revocation. The two existing active paired
+credentials remain intact. Private downloader authentication and the shared
+worker lease were checked without processing a song. The browser displays the
+pairing screen correctly. Existing native signing/privacy edits are preserved;
+cache-lyrics work remains paused at 23 published and 55 staged. Read
+[REMOTE_ACCESS.md](REMOTE_ACCESS.md) for current operation and update commands.
+
 The one-time continuation resumed successfully at 2:12 AM Pacific on October 14, 2026. No reset credits were used. Cleanup and audit results are in [CODE_AUDIT.md](CODE_AUDIT.md).
 
 October 15 lyrics maintenance is in progress at the owner's request: upgrade Whisper-only entries to Qwen and verify/re-align saved LRCLIB timing against independent Qwen audio evidence. All 103 cache entries have local rollback snapshots. Twenty-three titles are published in the active run, completing all originally non-LRCLIB entries; all five original Whisper entries and four missing/unavailable entries have Qwen results across the two runs. Both verified LRCLIB entries retain their text and timestamps exactly. The NumPy serialization failure is fixed, and engine version 4 repairs greedy repeated-section matching. The owner has approved a separate Qwen reference-alignment pass that preserves correct LRCLIB wording, plus Qwen fallback for clear reference mismatches after checking for a correct fresh reference. Analysis has staged another 55 titles (78 prepared total, including 23 published); the runner stopped cleanly with STOP present and no lock. A publication guard now holds hybrid substitutions, added/omitted reference lines and changed phonetics; all 93 JavaScript and 28 Python checks plus lint pass. This guard does not implement the approved reference-alignment pass. Implement and test that pass before further LRCLIB publication, retaining the original snapshot as the wording baseline. Read [CACHE_LYRICS_REFRESH.md](CACHE_LYRICS_REFRESH.md) for the run directories, resumable commands and publication safeguards. Do not report the cache refresh complete until the journal accounts for every title and any held results are resolved.

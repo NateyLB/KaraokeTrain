@@ -34,6 +34,19 @@ AVFoundation media cookies scoped to the paired HTTPS origin. Debug and Release
 simulator builds pass. An updated build still needs installation and a physical
 iPhone/cellular test; the old phone build does not contain these changes.
 
+On November 18, 2026 the deployment was restored after a Homebrew upgrade left
+all three launch agents using Node 26.10's obsolete Cellar path and a missing
+dynamic library. They now launch through `/opt/homebrew/opt/node/bin/node`,
+which follows the installed Node formula across upgrades, with a fixed service
+PATH. The installer supports backed-up updates of this project's definitions.
+Next.js and its lint configuration are patched to 16.4.6, dependency fixes are
+locked, and the production audit reports zero known vulnerabilities. All 124
+regression checks, lint and a fresh production build passed. Both isolated and
+public HTTPS access/GCS checks passed again, and all three services are running.
+The two existing active paired credentials were preserved. Both environment
+files and the private access/tunnel files have owner-only permissions. No new
+song processing or lyric publication was triggered during this recovery.
+
 ## Credentials and permissions
 
 - Pairing links contain 256-bit random secrets in URL fragments. They last ten
@@ -71,9 +84,21 @@ npm run build:server
 node tools/mac-services.mjs --install
 ```
 
-Installation refuses to replace an existing launch-agent definition. Prepared
-definitions are saved under `.runtime/launchagents`; inspect changes before
-replacing installed files. The labels are `com.karaoketrain.remote.api`,
+Installation refuses to replace an existing launch-agent definition unless
+`--update` is explicitly supplied with `--install`. Updates check the existing
+label and project directory, keep private backups under
+`.runtime/launchagents/backups`, replace the definition atomically and restore
+the previous definition if bootstrap fails. Prepared definitions are saved
+under `.runtime/launchagents`. To apply reviewed configuration changes:
+
+```sh
+node tools/mac-services.mjs --install --update
+node tools/mac-services.mjs --tunnel --install --update
+```
+
+Stop the API before rebuilding its `.next-production` directory and preserve
+the previous build privately for rollback. Restore the services only after the
+new build and isolated access checks pass. The labels are `com.karaoketrain.remote.api`,
 `com.karaoketrain.remote.downloader` and, after tunnel activation,
 `com.karaoketrain.remote.tunnel`. Use `launchctl print gui/UID/LABEL` to inspect a
 service and `launchctl kickstart -k gui/UID/LABEL` to restart it, substituting the
@@ -132,7 +157,7 @@ Nothing sends an invitation to another person automatically.
 
 ## Verification
 
-`npm test` passes 93 JavaScript and 28 Python checks. Lint, the production build,
+`npm test` passes 96 JavaScript and 28 Python checks. Lint, the production build,
 the native regression suite, and iOS Debug/Release simulator builds pass. The
 production dependency audit reports zero known vulnerabilities. Live tests use
 an isolated production process and temporary credentials:
